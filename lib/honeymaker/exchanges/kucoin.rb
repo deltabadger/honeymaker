@@ -9,7 +9,7 @@ module Honeymaker
         with_rescue do
           response = connection.get("/api/v2/symbols")
 
-          response.body["data"].map do |product|
+          response.body["data"].filter_map do |product|
             {
               ticker: product["symbol"],
               base: product["baseCurrency"],
@@ -23,7 +23,7 @@ module Honeymaker
               price_decimals: Utils.decimals(product["priceIncrement"]),
               available: product["enableTrading"]
             }
-          end.compact
+          end
         end
       end
 

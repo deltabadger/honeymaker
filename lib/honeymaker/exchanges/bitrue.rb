@@ -10,29 +10,19 @@ module Honeymaker
           response = connection.get("/api/v1/exchangeInfo")
 
           response.body["symbols"].filter_map do |product|
-            filters = product["filters"] || []
-            price_filter = filters.find { |f| f["filterType"] == "PRICE_FILTER" }
-            lot_size_filter = filters.find { |f| f["filterType"] == "LOT_SIZE" }
+            f = Utils.parse_filters(product["filters"] || [])
 
             {
               ticker: product["symbol"],
               base: product["baseAsset"]&.upcase,
               quote: product["quoteAsset"]&.upcase,
-              minimum_base_size: lot_size_filter&.dig("minQty"),
-              minimum_quote_size: lot_size_filter&.dig("minVal"),
-              maximum_base_size: lot_size_filter&.dig("maxQty"),
+              minimum_base_size: f[:lot_size]&.dig("minQty"),
+              minimum_quote_size: f[:lot_size]&.dig("minVal"),
+              maximum_base_size: f[:lot_size]&.dig("maxQty"),
               maximum_quote_size: nil,
-              base_decimals: if lot_size_filter
-                               Utils.decimals(lot_size_filter["stepSize"])
-                             else
-                               product["baseAssetPrecision"]
-                             end,
+              base_decimals: f[:lot_size] ? Utils.decimals(f[:lot_size]["stepSize"]) : product["baseAssetPrecision"],
               quote_decimals: product["quotePrecision"],
-              price_decimals: if price_filter
-                                Utils.decimals(price_filter["tickSize"])
-                              else
-                                product["quotePrecision"]
-                              end,
+              price_decimals: f[:price] ? Utils.decimals(f[:price]["tickSize"]) : product["quotePrecision"],
               available: product["status"] == "TRADING"
             }
           end

@@ -9,29 +9,23 @@ module Honeymaker
         with_rescue do
           response = connection.get("/api/v3/exchangeInfo")
 
-          response.body["symbols"].map do |product|
-            ticker = product["symbol"]
-            status = product["status"]
-
-            filters = product["filters"]
-            price_filter = filters.find { |f| f["filterType"] == "PRICE_FILTER" }
-            lot_size_filter = filters.find { |f| f["filterType"] == "LOT_SIZE" }
-            notional_filter = filters.find { |f| %w[NOTIONAL MIN_NOTIONAL].include?(f["filterType"]) }
+          response.body["symbols"].filter_map do |product|
+            f = Utils.parse_filters(product["filters"])
 
             {
-              ticker: ticker,
+              ticker: product["symbol"],
               base: product["baseAsset"],
               quote: product["quoteAsset"],
-              minimum_base_size: lot_size_filter&.[]("minQty"),
-              minimum_quote_size: notional_filter&.[]("minNotional"),
-              maximum_base_size: lot_size_filter&.[]("maxQty"),
-              maximum_quote_size: notional_filter&.[]("maxNotional"),
-              base_decimals: lot_size_filter ? Utils.decimals(lot_size_filter["stepSize"]) : product["baseAssetPrecision"],
+              minimum_base_size: f[:lot_size]&.[]("minQty"),
+              minimum_quote_size: f[:notional]&.[]("minNotional"),
+              maximum_base_size: f[:lot_size]&.[]("maxQty"),
+              maximum_quote_size: f[:notional]&.[]("maxNotional"),
+              base_decimals: f[:lot_size] ? Utils.decimals(f[:lot_size]["stepSize"]) : product["baseAssetPrecision"],
               quote_decimals: product["quoteAssetPrecision"],
-              price_decimals: price_filter ? Utils.decimals(price_filter["tickSize"]) : product["quotePrecision"],
-              available: status == "TRADING"
+              price_decimals: f[:price] ? Utils.decimals(f[:price]["tickSize"]) : product["quotePrecision"],
+              available: product["status"] == "TRADING"
             }
-          end.compact
+          end
         end
       end
 

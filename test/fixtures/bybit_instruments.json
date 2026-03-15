@@ -1,0 +1,23 @@
+{
+  "result": {
+    "list": [
+      {
+        "symbol": "BTCUSDT",
+        "baseCoin": "BTC",
+        "quoteCoin": "USDT",
+        "status": "Trading",
+        "lotSizeFilter": {
+          "minOrderQty": "0.000048",
+          "maxOrderQty": "71.73956243",
+          "minOrderAmt": "1",
+          "maxOrderAmt": "4000000",
+          "basePrecision": "0.000001",
+          "quotePrecision": "0.00000001"
+        },
+        "priceFilter": {
+          "tickSize": "0.01"
+        }
+      }
+    ]
+  }
+}

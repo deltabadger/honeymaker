@@ -1,0 +1,16 @@
+[
+  {
+    "market": "BTC-EUR",
+    "status": "trading",
+    "minOrderInBaseAsset": "0.00001",
+    "minOrderInQuoteAsset": "5",
+    "pricePrecision": 5
+  },
+  {
+    "market": "ETH-EUR",
+    "status": "halted",
+    "minOrderInBaseAsset": "0.001",
+    "minOrderInQuoteAsset": "5",
+    "pricePrecision": 4
+  }
+]

@@ -1,0 +1,40 @@
+{
+  "symbols": [
+    {
+      "symbol": "BTCUSDT",
+      "status": "TRADING",
+      "baseAsset": "BTC",
+      "quoteAsset": "USDT",
+      "baseAssetPrecision": 8,
+      "quoteAssetPrecision": 8,
+      "quotePrecision": 2,
+      "filters": [
+        {
+          "filterType": "PRICE_FILTER",
+          "tickSize": "0.01"
+        },
+        {
+          "filterType": "LOT_SIZE",
+          "minQty": "0.00001",
+          "maxQty": "9000",
+          "stepSize": "0.00001"
+        },
+        {
+          "filterType": "MIN_NOTIONAL",
+          "minNotional": "5",
+          "maxNotional": "9000000"
+        }
+      ]
+    },
+    {
+      "symbol": "ETHUSDT",
+      "status": "HALT",
+      "baseAsset": "ETH",
+      "quoteAsset": "USDT",
+      "baseAssetPrecision": 6,
+      "quoteAssetPrecision": 8,
+      "quotePrecision": 2,
+      "filters": []
+    }
+  ]
+}

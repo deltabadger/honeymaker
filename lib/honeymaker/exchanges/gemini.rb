@@ -10,18 +10,16 @@ module Honeymaker
           symbols_response = connection.get("/v1/symbols")
           symbols = symbols_response.body
 
-          symbols.map do |symbol|
+          symbols.filter_map do |symbol|
             detail = connection.get("/v1/symbols/details/#{symbol}").body
 
-            base = detail["base_currency"].upcase
-            quote = detail["quote_currency"].upcase
             tick_size = detail["tick_size"]&.to_s || "0.01"
             quote_increment = detail["quote_increment"]&.to_s || "0.01"
 
             {
               ticker: symbol.upcase,
-              base: base,
-              quote: quote,
+              base: detail["base_currency"].upcase,
+              quote: detail["quote_currency"].upcase,
               minimum_base_size: detail["min_order_size"],
               minimum_quote_size: "0",
               maximum_base_size: nil,
@@ -31,7 +29,7 @@ module Honeymaker
               price_decimals: Utils.decimals(quote_increment),
               available: detail["status"] == "open"
             }
-          end.compact
+          end
         end
       end
 

@@ -9,7 +9,7 @@ module Honeymaker
         with_rescue do
           response = connection.get("/v2/markets")
 
-          response.body.map do |product|
+          response.body.filter_map do |product|
             market = product["market"]
             base, quote = market.split("-")
 
@@ -26,7 +26,7 @@ module Honeymaker
               price_decimals: product["pricePrecision"] || 8,
               available: product["status"] == "trading"
             }
-          end.compact
+          end
         end
       end
 

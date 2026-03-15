@@ -2,6 +2,7 @@
 
 require "minitest/autorun"
 require "mocha/minitest"
+require "ostruct"
 require "honeymaker"
 
 # Load fixture helpers

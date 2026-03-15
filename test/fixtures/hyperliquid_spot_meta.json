@@ -1,0 +1,12 @@
+{
+  "tokens": [
+    { "name": "PURR", "index": 0, "szDecimals": 2 },
+    { "name": "USDC", "index": 1, "szDecimals": 6 }
+  ],
+  "universe": [
+    {
+      "name": "PURR/USDC",
+      "tokens": [0, 1]
+    }
+  ]
+}

@@ -15,14 +15,10 @@ module Honeymaker
         with_rescue do
           response = connection.get("/api/v3/brokerage/market/products")
 
-          response.body["products"].map do |product|
+          response.body["products"].filter_map do |product|
             ticker = product["product_id"]
             base, quote = ticker.split("-")
             next if ASSET_BLACKLIST.include?(base)
-
-            base_increment = product["base_increment"]
-            quote_increment = product["quote_increment"]
-            price_increment = product["price_increment"]
 
             {
               ticker: ticker,
@@ -32,12 +28,12 @@ module Honeymaker
               minimum_quote_size: product["quote_min_size"],
               maximum_base_size: product["base_max_size"],
               maximum_quote_size: product["quote_max_size"],
-              base_decimals: Utils.decimals(base_increment),
-              quote_decimals: Utils.decimals(quote_increment),
-              price_decimals: Utils.decimals(price_increment),
+              base_decimals: Utils.decimals(product["base_increment"]),
+              quote_decimals: Utils.decimals(product["quote_increment"]),
+              price_decimals: Utils.decimals(product["price_increment"]),
               available: true
             }
-          end.compact
+          end
         end
       end
 

@@ -1,0 +1,28 @@
+{
+  "data": [
+    {
+      "symbol": "BTCUSDT",
+      "baseCoin": "BTC",
+      "quoteCoin": "USDT",
+      "minTradeAmount": "0.00001",
+      "minTradeUSDT": "5",
+      "maxTradeAmount": "9000",
+      "quantityPrecision": "6",
+      "quotePrecision": "8",
+      "pricePrecision": "2",
+      "status": "online"
+    },
+    {
+      "symbol": "ETHUSDT",
+      "baseCoin": "ETH",
+      "quoteCoin": "USDT",
+      "minTradeAmount": "0.001",
+      "minTradeUSDT": "5",
+      "maxTradeAmount": "5000",
+      "quantityPrecision": "4",
+      "quotePrecision": "8",
+      "pricePrecision": "2",
+      "status": "offline"
+    }
+  ]
+}

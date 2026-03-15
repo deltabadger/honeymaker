@@ -1,0 +1,24 @@
+{
+  "products": [
+    {
+      "product_id": "BTC-USD",
+      "base_increment": "0.00000001",
+      "quote_increment": "0.01",
+      "price_increment": "0.01",
+      "base_min_size": "0.00000001",
+      "quote_min_size": "1",
+      "base_max_size": "3400",
+      "quote_max_size": "250000000"
+    },
+    {
+      "product_id": "RENDER-USD",
+      "base_increment": "0.01",
+      "quote_increment": "0.01",
+      "price_increment": "0.01",
+      "base_min_size": "0.01",
+      "quote_min_size": "1",
+      "base_max_size": "10000",
+      "quote_max_size": "250000000"
+    }
+  ]
+}

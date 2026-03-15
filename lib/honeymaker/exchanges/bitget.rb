@@ -9,7 +9,7 @@ module Honeymaker
         with_rescue do
           response = connection.get("/api/v2/spot/public/symbols")
 
-          response.body["data"].map do |product|
+          response.body["data"].filter_map do |product|
             {
               ticker: product["symbol"],
               base: product["baseCoin"],
@@ -23,7 +23,7 @@ module Honeymaker
               price_decimals: product["pricePrecision"].to_i,
               available: product["status"] == "online"
             }
-          end.compact
+          end
         end
       end
 

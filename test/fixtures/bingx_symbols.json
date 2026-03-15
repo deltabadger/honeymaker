@@ -1,0 +1,26 @@
+{
+  "data": {
+    "symbols": [
+      {
+        "symbol": "BTC-USDT",
+        "minQty": "0.00001",
+        "maxQty": "500",
+        "minNotional": "1",
+        "maxNotional": "5000000",
+        "stepSize": "0.00001",
+        "tickSize": "0.01",
+        "status": 1
+      },
+      {
+        "symbol": "INVALID",
+        "minQty": 1,
+        "maxQty": 1000,
+        "minNotional": 1,
+        "maxNotional": 10000,
+        "stepSize": "1",
+        "tickSize": "0.01",
+        "status": 1
+      }
+    ]
+  }
+}

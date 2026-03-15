@@ -11,7 +11,7 @@ module Honeymaker
             req.params = { category: "spot" }
           end
 
-          response.body["result"]["list"].map do |product|
+          response.body["result"]["list"].filter_map do |product|
             lot_size_filter = product["lotSizeFilter"]
             price_filter = product["priceFilter"]
 
@@ -28,7 +28,7 @@ module Honeymaker
               price_decimals: Utils.decimals(price_filter["tickSize"]),
               available: product["status"] == "Trading"
             }
-          end.compact
+          end
         end
       end
 

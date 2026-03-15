@@ -9,8 +9,8 @@ Gem::Specification.new do |spec|
   spec.email = ["hello@deltabadger.com"]
 
   spec.summary = "Ruby clients for cryptocurrency exchange APIs"
-  spec.description = "Unified interface for fetching market data from cryptocurrency exchanges. " \
-                     "Supports Binance, Kraken, Coinbase, Bybit, KuCoin, Bitget, MEXC, and more."
+  spec.description = "Unified interface for cryptocurrency exchange APIs — market data, trading, " \
+                     "balances, and orders. Supports Binance, Kraken, Coinbase, Bybit, KuCoin, Bitget, MEXC, and more."
   spec.homepage = "https://github.com/deltabadger/honeymaker"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.2.0"
@@ -32,4 +32,5 @@ Gem::Specification.new do |spec|
   spec.add_dependency "faraday", "~> 2.0"
   spec.add_dependency "faraday-net_http_persistent", "~> 2.0"
   spec.add_dependency "net-http-persistent", "~> 4.0"
+  spec.add_dependency "jwt", "~> 2.0"
 end
