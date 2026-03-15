@@ -1,5 +1,9 @@
 # Honeymaker
 
+[![Gem Version](https://img.shields.io/gem/v/honeymaker)](https://rubygems.org/gems/honeymaker)
+[![CI](https://github.com/deltabadger/honeymaker/actions/workflows/test.yml/badge.svg)](https://github.com/deltabadger/honeymaker/actions)
+[![License](https://img.shields.io/github/license/deltabadger/honeymaker)](LICENSE)
+
 Ruby clients for cryptocurrency exchange APIs. Originally extracted from [Deltabadger](https://github.com/deltabadger/deltabadger).
 
 ## Supported Exchanges
