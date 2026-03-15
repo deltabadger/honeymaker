@@ -1,0 +1,30 @@
+{
+  "symbols": [
+    {
+      "symbol": "BTCUSDT",
+      "status": "TRADING",
+      "baseAsset": "BTC",
+      "quoteAsset": "USDT",
+      "quoteAssetPrecision": 8,
+      "filters": [
+        {
+          "filterType": "PRICE_FILTER",
+          "minPrice": "0.01",
+          "maxPrice": "1000000.00",
+          "tickSize": "0.01"
+        },
+        {
+          "filterType": "LOT_SIZE",
+          "minQty": "0.00000100",
+          "maxQty": "9000.00000000",
+          "stepSize": "0.000001"
+        },
+        {
+          "filterType": "NOTIONAL",
+          "minNotional": "5.00000000",
+          "maxNotional": "9000000.00000000"
+        }
+      ]
+    }
+  ]
+}

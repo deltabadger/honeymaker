@@ -1,0 +1,16 @@
+{
+  "error": [],
+  "result": {
+    "XBTUSDT": {
+      "altname": "XBTUSDT",
+      "wsname": "XBT/USDT",
+      "base": "XXBT",
+      "quote": "USDT",
+      "lot_decimals": 8,
+      "cost_decimals": 5,
+      "pair_decimals": 1,
+      "ordermin": "0.00010000",
+      "costmin": "0.50000"
+    }
+  }
+}
