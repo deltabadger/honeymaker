@@ -49,6 +49,21 @@ module Honeymaker
         delete_signed("/v2/order", { market: market, orderId: order_id })
       end
 
+      def get_trades(market:, limit: nil, start_time: nil, end_time: nil, trade_id_from: nil, trade_id_to: nil)
+        get_signed("/v2/trades", {
+          market: market, limit: limit, start: start_time, end: end_time,
+          tradeIdFrom: trade_id_from, tradeIdTo: trade_id_to
+        })
+      end
+
+      def get_deposit_history(symbol: nil, limit: nil, start_time: nil, end_time: nil)
+        get_signed("/v2/deposit", { symbol: symbol, limit: limit, start: start_time, end: end_time })
+      end
+
+      def get_withdrawal_history(symbol: nil, limit: nil, start_time: nil, end_time: nil)
+        get_signed("/v2/withdrawal", { symbol: symbol, limit: limit, start: start_time, end: end_time })
+      end
+
       def withdraw(symbol:, amount:, address:, payment_id: nil)
         post_signed("/v2/withdrawal", {
           symbol: symbol, amount: amount, address: address, paymentId: payment_id

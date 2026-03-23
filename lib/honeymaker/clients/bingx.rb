@@ -50,6 +50,27 @@ module Honeymaker
         })
       end
 
+      def get_trade_fills(symbol: nil, order_id: nil, start_time: nil, end_time: nil, from_id: nil, limit: nil)
+        get_signed("/openApi/spot/v1/trade/fills", {
+          symbol: symbol, orderId: order_id,
+          startTime: start_time, endTime: end_time, fromId: from_id, limit: limit
+        })
+      end
+
+      def deposit_history(coin: nil, status: nil, start_time: nil, end_time: nil, offset: nil, limit: nil)
+        get_signed("/openApi/wallets/v1/capital/deposit/hisrec", {
+          coin: coin, status: status,
+          startTime: start_time, endTime: end_time, offset: offset, limit: limit
+        })
+      end
+
+      def withdraw_history(coin: nil, status: nil, start_time: nil, end_time: nil, offset: nil, limit: nil, id: nil)
+        get_signed("/openApi/wallets/v1/capital/withdraw/history", {
+          coin: coin, status: status,
+          startTime: start_time, endTime: end_time, offset: offset, limit: limit, id: id
+        })
+      end
+
       def withdraw(coin:, address:, amount:, network: nil, wallet_type: nil, tag: nil)
         post_signed("/openApi/wallets/v1/capital/withdraw/apply", {
           coin: coin, address: address, amount: amount,

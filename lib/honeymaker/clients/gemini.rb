@@ -41,6 +41,14 @@ module Honeymaker
         post_signed("/v1/order/cancel", { order_id: order_id })
       end
 
+      def get_my_trades(symbol: nil, limit_trades: nil, timestamp: nil)
+        post_signed("/v1/mytrades", { symbol: symbol, limit_trades: limit_trades, timestamp: timestamp })
+      end
+
+      def get_transfers(timestamp: nil, limit_transfers: nil)
+        post_signed("/v1/transfers", { timestamp: timestamp, limit_transfers: limit_transfers })
+      end
+
       def withdraw(currency:, address:, amount:)
         post_signed("/v1/withdraw/#{currency}", { address: address, amount: amount })
       end

@@ -53,6 +53,24 @@ class Honeymaker::Clients::MexcTest < Minitest::Test
     assert result.success?
   end
 
+  def test_account_trade_list
+    stub_connection(:get, [{ "symbol" => "BTCUSDT", "id" => 1 }])
+    result = @client.account_trade_list(symbol: "BTCUSDT")
+    assert result.success?
+  end
+
+  def test_deposit_history
+    stub_connection(:get, [{ "coin" => "BTC" }])
+    result = @client.deposit_history
+    assert result.success?
+  end
+
+  def test_withdraw_history
+    stub_connection(:get, [{ "coin" => "ETH" }])
+    result = @client.withdraw_history
+    assert result.success?
+  end
+
   def test_headers_include_api_key
     headers = @client.send(:headers)
     assert_equal "test_key", headers[:"X-MEXC-APIKEY"]

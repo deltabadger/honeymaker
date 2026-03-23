@@ -25,6 +25,19 @@ module Honeymaker
         post_info({ type: "openOrders", user: user })
       end
 
+      def user_fills(user:, start_time: nil, end_time: nil)
+        body = { type: "userFills", user: user }
+        body[:startTime] = start_time if start_time
+        body[:endTime] = end_time if end_time
+        post_info(body)
+      end
+
+      def user_fills_by_time(user:, start_time:, end_time: nil)
+        body = { type: "userFillsByTime", user: user, startTime: start_time }
+        body[:endTime] = end_time if end_time
+        post_info(body)
+      end
+
       private
 
       def validate_trading_credentials

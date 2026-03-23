@@ -59,6 +59,24 @@ class Honeymaker::Clients::KucoinTest < Minitest::Test
     assert result.success?
   end
 
+  def test_get_fills
+    stub_connection(:get, { "data" => { "items" => [{ "tradeId" => "t1" }] } })
+    result = @client.get_fills(symbol: "BTC-USDT")
+    assert result.success?
+  end
+
+  def test_get_deposits
+    stub_connection(:get, { "data" => { "items" => [{ "currency" => "BTC" }] } })
+    result = @client.get_deposits
+    assert result.success?
+  end
+
+  def test_get_withdrawals
+    stub_connection(:get, { "data" => { "items" => [{ "currency" => "ETH" }] } })
+    result = @client.get_withdrawals
+    assert result.success?
+  end
+
   def test_signed_headers_include_passphrase_and_version
     ts = "1234567890"
     headers = @client.send(:signed_headers, ts, "payload")

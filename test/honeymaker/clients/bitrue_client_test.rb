@@ -47,6 +47,12 @@ class Honeymaker::Clients::BitrueTest < Minitest::Test
     assert result.success?
   end
 
+  def test_account_trade_list
+    stub_connection(:get, [{ "symbol" => "BTCUSDT", "id" => 1 }])
+    result = @client.account_trade_list(symbol: "BTCUSDT")
+    assert result.success?
+  end
+
   def test_headers_include_api_key
     headers = @client.send(:auth_headers)
     assert_equal "test_key", headers[:"X-MBX-APIKEY"]

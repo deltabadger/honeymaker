@@ -42,6 +42,18 @@ class Honeymaker::Clients::HyperliquidTest < Minitest::Test
     assert result.success?
   end
 
+  def test_user_fills
+    stub_connection(:post, [{ "oid" => 1, "side" => "B" }])
+    result = @client.user_fills(user: "0xabc")
+    assert result.success?
+  end
+
+  def test_user_fills_by_time
+    stub_connection(:post, [{ "oid" => 1, "side" => "B" }])
+    result = @client.user_fills_by_time(user: "0xabc", start_time: 1710936000000)
+    assert result.success?
+  end
+
   private
 
   def stub_connection(method, body)

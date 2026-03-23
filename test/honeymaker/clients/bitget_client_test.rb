@@ -71,6 +71,24 @@ class Honeymaker::Clients::BitgetTest < Minitest::Test
     assert result.success?
   end
 
+  def test_get_fills
+    stub_connection(:get, { "data" => [{ "tradeId" => "t1" }] })
+    result = @client.get_fills(symbol: "BTCUSDT")
+    assert result.success?
+  end
+
+  def test_deposit_list
+    stub_connection(:get, { "data" => [{ "coin" => "BTC" }] })
+    result = @client.deposit_list
+    assert result.success?
+  end
+
+  def test_withdrawal_list
+    stub_connection(:get, { "data" => [{ "coin" => "ETH" }] })
+    result = @client.withdrawal_list
+    assert result.success?
+  end
+
   def test_signed_headers_include_passphrase
     ts = "1234567890"
     headers = @client.send(:signed_headers, ts, "payload")

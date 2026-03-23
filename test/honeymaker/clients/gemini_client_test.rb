@@ -60,6 +60,18 @@ class Honeymaker::Clients::GeminiTest < Minitest::Test
     assert result.success?
   end
 
+  def test_get_my_trades
+    stub_connection(:post, [{ "tid" => 123, "price" => "50000" }])
+    result = @client.get_my_trades(symbol: "btcusd")
+    assert result.success?
+  end
+
+  def test_get_transfers
+    stub_connection(:post, [{ "type" => "Deposit", "currency" => "BTC" }])
+    result = @client.get_transfers
+    assert result.success?
+  end
+
   private
 
   def stub_connection(method, body)

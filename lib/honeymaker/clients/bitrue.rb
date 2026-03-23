@@ -52,6 +52,13 @@ module Honeymaker
         })
       end
 
+      def account_trade_list(symbol:, start_time: nil, end_time: nil, from_id: nil, limit: 500, recv_window: 5000)
+        get_signed("/api/v1/myTrades", {
+          symbol: symbol, startTime: start_time, endTime: end_time,
+          fromId: from_id, limit: limit, recvWindow: recv_window
+        })
+      end
+
       private
 
       def validate_trading_credentials

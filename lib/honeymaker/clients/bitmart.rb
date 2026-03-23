@@ -52,6 +52,25 @@ module Honeymaker
         })
       end
 
+      def get_trades(symbol:, order_mode: nil, start_time: nil, end_time: nil, limit: nil, recv_window: nil)
+        get_signed("/spot/v2/trades", {
+          symbol: symbol, orderMode: order_mode,
+          startTime: start_time, endTime: end_time, N: limit, recvWindow: recv_window
+        })
+      end
+
+      def deposit_list(currency: nil, n: nil, status: nil)
+        get_signed("/account/v1/deposit-withdraw/detail", {
+          currency: currency, N: n, type: "deposit", operation_type: "deposit", status: status
+        })
+      end
+
+      def withdraw_list(currency: nil, n: nil, status: nil)
+        get_signed("/account/v1/deposit-withdraw/detail", {
+          currency: currency, N: n, type: "withdraw", operation_type: "withdraw", status: status
+        })
+      end
+
       def withdraw(currency:, amount:, address:, address_memo: nil, destination: nil)
         post_signed("/account/v1/withdraw/apply", {
           currency: currency, amount: amount,

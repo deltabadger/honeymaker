@@ -59,6 +59,24 @@ class Honeymaker::Clients::BitvavoTest < Minitest::Test
     assert result.success?
   end
 
+  def test_get_trades
+    stub_connection(:get, [{ "id" => "t1", "side" => "buy" }])
+    result = @client.get_trades(market: "BTC-EUR")
+    assert result.success?
+  end
+
+  def test_get_deposit_history
+    stub_connection(:get, [{ "symbol" => "BTC", "amount" => "1.0" }])
+    result = @client.get_deposit_history
+    assert result.success?
+  end
+
+  def test_get_withdrawal_history
+    stub_connection(:get, [{ "symbol" => "ETH", "amount" => "2.0" }])
+    result = @client.get_withdrawal_history
+    assert result.success?
+  end
+
   def test_signed_headers_include_access_window
     ts = "1234567890"
     headers = @client.send(:signed_headers, ts, "payload")

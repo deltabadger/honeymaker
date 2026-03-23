@@ -59,6 +59,24 @@ class Honeymaker::Clients::BitMartTest < Minitest::Test
     assert result.success?
   end
 
+  def test_get_trades
+    stub_connection(:get, { "data" => [{ "tradeId" => "t1" }] })
+    result = @client.get_trades(symbol: "BTC_USDT")
+    assert result.success?
+  end
+
+  def test_deposit_list
+    stub_connection(:get, { "data" => { "records" => [{ "currency" => "BTC" }] } })
+    result = @client.deposit_list
+    assert result.success?
+  end
+
+  def test_withdraw_list
+    stub_connection(:get, { "data" => { "records" => [{ "currency" => "ETH" }] } })
+    result = @client.withdraw_list
+    assert result.success?
+  end
+
   def test_signed_headers_include_memo_in_signature
     ts = "1234567890"
     pre_sign = "#{ts}#test_memo#body"

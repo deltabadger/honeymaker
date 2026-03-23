@@ -53,6 +53,24 @@ class Honeymaker::Clients::BingXTest < Minitest::Test
     assert result.success?
   end
 
+  def test_get_trade_fills
+    stub_connection(:get, { "data" => [{ "tradeId" => "t1" }] })
+    result = @client.get_trade_fills(symbol: "BTC-USDT")
+    assert result.success?
+  end
+
+  def test_deposit_history
+    stub_connection(:get, [{ "coin" => "BTC" }])
+    result = @client.deposit_history
+    assert result.success?
+  end
+
+  def test_withdraw_history
+    stub_connection(:get, [{ "coin" => "ETH" }])
+    result = @client.withdraw_history
+    assert result.success?
+  end
+
   private
 
   def stub_connection(method, body)

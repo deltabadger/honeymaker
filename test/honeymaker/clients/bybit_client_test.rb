@@ -60,6 +60,24 @@ class Honeymaker::Clients::BybitTest < Minitest::Test
     assert result.success?
   end
 
+  def test_execution_list
+    stub_connection(:get, { "result" => { "list" => [{ "execId" => "e1" }] } })
+    result = @client.execution_list(category: "spot")
+    assert result.success?
+  end
+
+  def test_deposit_records
+    stub_connection(:get, { "result" => { "rows" => [{ "coin" => "BTC" }] } })
+    result = @client.deposit_records
+    assert result.success?
+  end
+
+  def test_withdraw_records
+    stub_connection(:get, { "result" => { "rows" => [{ "coin" => "ETH" }] } })
+    result = @client.withdraw_records
+    assert result.success?
+  end
+
   def test_signed_headers_include_api_key
     headers = @client.send(:signed_headers, "GET", { foo: "bar" })
     assert_equal "test_key", headers[:"X-BAPI-API-KEY"]

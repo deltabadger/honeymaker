@@ -56,6 +56,25 @@ module Honeymaker
         })
       end
 
+      def get_fills(symbol: nil, order_id: nil, start_time: nil, end_time: nil, limit: nil, id_less_than: nil)
+        get_signed("/api/v2/spot/trade/fills", {
+          symbol: symbol, orderId: order_id,
+          startTime: start_time, endTime: end_time, limit: limit, idLessThan: id_less_than
+        })
+      end
+
+      def deposit_list(coin: nil, start_time: nil, end_time: nil, limit: nil, id_less_than: nil)
+        get_signed("/api/v2/spot/wallet/deposit-records", {
+          coin: coin, startTime: start_time, endTime: end_time, limit: limit, idLessThan: id_less_than
+        })
+      end
+
+      def withdrawal_list(coin: nil, start_time: nil, end_time: nil, limit: nil, id_less_than: nil)
+        get_signed("/api/v2/spot/wallet/withdrawal-records", {
+          coin: coin, startTime: start_time, endTime: end_time, limit: limit, idLessThan: id_less_than
+        })
+      end
+
       def withdraw(coin:, address:, size:, transfer_type: nil, chain: nil, tag: nil, client_oid: nil)
         post_signed("/api/v2/spot/wallet/withdrawal", {
           coin: coin, transferType: transfer_type, address: address,

@@ -58,6 +58,27 @@ module Honeymaker
         })
       end
 
+      def account_trade_list(symbol:, order_id: nil, start_time: nil, end_time: nil, limit: 500, recv_window: 5000)
+        get_signed("/api/v3/myTrades", {
+          symbol: symbol, orderId: order_id,
+          startTime: start_time, endTime: end_time, limit: limit, recvWindow: recv_window
+        })
+      end
+
+      def deposit_history(coin: nil, status: nil, start_time: nil, end_time: nil, limit: 1000, recv_window: 5000)
+        get_signed("/api/v3/capital/deposit/hisrec", {
+          coin: coin, status: status,
+          startTime: start_time, endTime: end_time, limit: limit, recvWindow: recv_window
+        })
+      end
+
+      def withdraw_history(coin: nil, status: nil, start_time: nil, end_time: nil, limit: 1000, recv_window: 5000)
+        get_signed("/api/v3/capital/withdraw/history", {
+          coin: coin, status: status,
+          startTime: start_time, endTime: end_time, limit: limit, recvWindow: recv_window
+        })
+      end
+
       def get_withdraw_addresses(recv_window: 5000)
         get_signed("/api/v3/capital/withdraw/address", { recvWindow: recv_window })
       end

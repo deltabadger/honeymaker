@@ -61,6 +61,26 @@ module Honeymaker
         })
       end
 
+      def execution_list(category:, symbol: nil, order_id: nil, start_time: nil, end_time: nil, limit: nil, cursor: nil)
+        get_authenticated("/v5/execution/list", {
+          category: category, symbol: symbol, orderId: order_id,
+          startTime: start_time, endTime: end_time, limit: limit, cursor: cursor
+        })
+      end
+
+      def deposit_records(coin: nil, start_time: nil, end_time: nil, limit: nil, cursor: nil)
+        get_authenticated("/v5/asset/deposit/query-record", {
+          coin: coin, startTime: start_time, endTime: end_time, limit: limit, cursor: cursor
+        })
+      end
+
+      def withdraw_records(coin: nil, start_time: nil, end_time: nil, limit: nil, cursor: nil, withdraw_type: nil)
+        get_authenticated("/v5/asset/withdraw/query-record", {
+          coin: coin, startTime: start_time, endTime: end_time,
+          limit: limit, cursor: cursor, withdrawType: withdraw_type
+        })
+      end
+
       def withdraw(coin:, chain:, address:, amount:, tag: nil, force_chain: nil)
         post_authenticated("/v5/asset/withdraw/create", {
           coin: coin, chain: chain, address: address, amount: amount,

@@ -59,6 +59,29 @@ module Honeymaker
         get_signed("/api/v1/withdrawals/quotas", { currency: currency, chain: chain })
       end
 
+      def get_fills(order_id: nil, symbol: nil, side: nil, type: nil, start_at: nil, end_at: nil,
+                    trade_type: nil, limit: nil, current_page: nil)
+        get_signed("/api/v1/fills", {
+          orderId: order_id, symbol: symbol, side: side, type: type,
+          startAt: start_at, endAt: end_at, tradeType: trade_type,
+          pageSize: limit, currentPage: current_page
+        })
+      end
+
+      def get_deposits(currency: nil, start_at: nil, end_at: nil, status: nil, current_page: nil, page_size: nil)
+        get_signed("/api/v1/deposits", {
+          currency: currency, startAt: start_at, endAt: end_at,
+          status: status, currentPage: current_page, pageSize: page_size
+        })
+      end
+
+      def get_withdrawals(currency: nil, start_at: nil, end_at: nil, status: nil, current_page: nil, page_size: nil)
+        get_signed("/api/v1/withdrawals", {
+          currency: currency, startAt: start_at, endAt: end_at,
+          status: status, currentPage: current_page, pageSize: page_size
+        })
+      end
+
       def withdraw(currency:, address:, amount:, chain: nil, memo: nil)
         post_signed("/api/v1/withdrawals", {
           currency: currency, address: address, amount: amount,
