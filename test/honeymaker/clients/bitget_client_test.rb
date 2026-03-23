@@ -41,6 +41,12 @@ class Honeymaker::Clients::BitgetTest < Minitest::Test
     assert result.success?
   end
 
+  def test_place_order_with_quote_size
+    stub_connection(:post, { "data" => { "orderId" => "456" } })
+    result = @client.place_order(symbol: "BTCUSDT", side: "buy", order_type: "market", quote_size: "100")
+    assert result.success?
+  end
+
   def test_get_order
     stub_connection(:get, { "data" => [{ "orderId" => "123" }] })
     result = @client.get_order(order_id: "123")
@@ -61,7 +67,7 @@ class Honeymaker::Clients::BitgetTest < Minitest::Test
 
   def test_withdraw
     stub_connection(:post, { "data" => { "orderId" => "w1" } })
-    result = @client.withdraw(coin: "BTC", transfer_type: "on_chain", address: "addr", size: "0.1")
+    result = @client.withdraw(coin: "BTC", address: "addr", size: "0.1")
     assert result.success?
   end
 

@@ -61,6 +61,20 @@ module Honeymaker
         get_public("/0/public/OHLC", { pair: pair, interval: interval, since: since })
       end
 
+      def get_trades_history(type: nil, trades: nil, start: nil, end_time: nil, ofs: nil)
+        post_private("/0/private/TradesHistory", {
+          nonce: nonce, type: type, trades: trades,
+          start: start, end: end_time, ofs: ofs
+        })
+      end
+
+      def get_ledgers(asset: nil, type: nil, start: nil, end_time: nil, ofs: nil)
+        post_private("/0/private/Ledgers", {
+          nonce: nonce, asset: asset, type: type,
+          start: start, end: end_time, ofs: ofs
+        })
+      end
+
       def get_withdraw_addresses(asset: nil, method: nil)
         post_private("/0/private/WithdrawAddresses", { nonce: nonce, asset: asset, method: method })
       end
@@ -74,6 +88,22 @@ module Honeymaker
       end
 
       private
+
+      def validate_trading_credentials
+        result = get_extended_balance
+        return Result::Failure.new("Invalid trading credentials") if result.failure?
+
+        errors = result.data["error"]
+        if errors.is_a?(Array) && errors.none?
+          Result::Success.new(true)
+        else
+          Result::Failure.new("Invalid trading credentials")
+        end
+      end
+
+      def validate_read_credentials
+        validate_trading_credentials
+      end
 
       def get_public(path, params = {})
         with_rescue do

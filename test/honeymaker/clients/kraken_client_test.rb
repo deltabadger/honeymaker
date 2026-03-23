@@ -46,6 +46,20 @@ class Honeymaker::Clients::KrakenTest < Minitest::Test
     assert result.success?
   end
 
+  def test_get_trades_history
+    stub_connection(:post, { "error" => [], "result" => { "trades" => { "T1" => { "pair" => "XBTUSDT" } }, "count" => 1 } })
+    result = @client.get_trades_history
+    assert result.success?
+    assert result.data["result"]["trades"].key?("T1")
+  end
+
+  def test_get_ledgers
+    stub_connection(:post, { "error" => [], "result" => { "ledger" => { "L1" => { "type" => "trade" } }, "count" => 1 } })
+    result = @client.get_ledgers
+    assert result.success?
+    assert result.data["result"]["ledger"].key?("L1")
+  end
+
   def test_private_headers_produce_signature
     headers = @client.send(:private_headers, "/0/private/Balance", "nonce=12345")
     assert headers.key?(:"API-Key")

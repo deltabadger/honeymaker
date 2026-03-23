@@ -39,10 +39,10 @@ module Honeymaker
         get_signed("/api/v2/spot/account/assets", { coin: coin })
       end
 
-      def place_order(symbol:, side:, order_type:, size:, price: nil, force: nil, client_oid: nil)
+      def place_order(symbol:, side:, order_type:, size: nil, quote_size: nil, price: nil, force: nil, client_oid: nil)
         post_signed("/api/v2/spot/trade/place-order", {
           symbol: symbol, side: side, orderType: order_type,
-          size: size, price: price, force: force, clientOid: client_oid
+          size: size, quoteSize: quote_size, price: price, force: force, clientOid: client_oid
         })
       end
 
@@ -56,7 +56,7 @@ module Honeymaker
         })
       end
 
-      def withdraw(coin:, transfer_type:, address:, size:, chain: nil, tag: nil, client_oid: nil)
+      def withdraw(coin:, address:, size:, transfer_type: nil, chain: nil, tag: nil, client_oid: nil)
         post_signed("/api/v2/spot/wallet/withdrawal", {
           coin: coin, transferType: transfer_type, address: address,
           size: size, chain: chain, tag: tag, clientOid: client_oid
@@ -64,6 +64,16 @@ module Honeymaker
       end
 
       private
+
+      def validate_trading_credentials
+        result = get_account_assets
+        return Result::Failure.new("Invalid trading credentials") if result.failure?
+        result.data["code"] == "00000" ? Result::Success.new(true) : Result::Failure.new("Invalid trading credentials")
+      end
+
+      def validate_read_credentials
+        validate_trading_credentials
+      end
 
       def get_public(path, params = {})
         with_rescue do

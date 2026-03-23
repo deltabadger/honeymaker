@@ -68,6 +68,20 @@ class Honeymaker::Clients::CoinbaseTest < Minitest::Test
     assert result.success?
   end
 
+  def test_list_fills
+    stub_connection(:get, { "fills" => [{ "trade_id" => "f1", "product_id" => "BTC-USD" }] })
+    result = @client.list_fills(product_id: "BTC-USD")
+    assert result.success?
+    assert_equal "f1", result.data["fills"].first["trade_id"]
+  end
+
+  def test_list_transactions
+    stub_connection(:get, { "data" => [{ "id" => "tx1", "type" => "send" }] })
+    result = @client.list_transactions(account_id: "acc1")
+    assert result.success?
+    assert_equal "tx1", result.data["data"].first["id"]
+  end
+
   def test_handles_api_error
     connection = stub
     connection.stubs(:get).raises(Faraday::ClientError.new("401", { status: 401, body: "Unauthorized" }))

@@ -168,6 +168,40 @@ module Honeymaker
         end
       end
 
+      def deposit_history(coin: nil, status: nil, start_time: nil, end_time: nil, offset: nil, limit: 1000, recv_window: 5000)
+        with_rescue do
+          response = connection.get do |req|
+            req.url "/sapi/v1/capital/deposit/hisrec"
+            req.headers = headers
+            req.params = {
+              coin: coin, status: status,
+              startTime: start_time, endTime: end_time,
+              offset: offset, limit: limit,
+              recvWindow: recv_window, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
+      def withdraw_history(coin: nil, status: nil, start_time: nil, end_time: nil, offset: nil, limit: 1000, recv_window: 5000)
+        with_rescue do
+          response = connection.get do |req|
+            req.url "/sapi/v1/capital/withdraw/history"
+            req.headers = headers
+            req.params = {
+              coin: coin, status: status,
+              startTime: start_time, endTime: end_time,
+              offset: offset, limit: limit,
+              recvWindow: recv_window, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
       def get_all_coins_information(recv_window: 5000)
         with_rescue do
           response = connection.get do |req|
@@ -221,6 +255,20 @@ module Honeymaker
       end
 
       private
+
+      def validate_trading_credentials
+        # Try cancelling a non-existent order — error -2011 (ORDER_DOES_NOT_EXIST) means key is valid with trade permission
+        result = cancel_order(symbol: "ETHBTC", order_id: "9999999999")
+        return Result::Failure.new("Invalid trading credentials") if result.failure?
+
+        code = result.data.is_a?(Hash) ? result.data["code"] : nil
+        code == -2011 ? Result::Success.new(true) : Result::Failure.new("Invalid trading credentials")
+      end
+
+      def validate_read_credentials
+        result = api_description
+        Result.new(data: result.success?, errors: result.success? ? [] : ["Invalid read credentials"])
+      end
 
       def headers
         if authenticated?

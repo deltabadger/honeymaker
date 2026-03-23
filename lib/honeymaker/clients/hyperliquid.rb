@@ -27,6 +27,16 @@ module Honeymaker
 
       private
 
+      def validate_trading_credentials
+        return Result::Failure.new("No wallet address provided") unless @api_key
+        result = open_orders(user: @api_key)
+        result.success? ? Result::Success.new(true) : Result::Failure.new("Invalid credentials")
+      end
+
+      def validate_read_credentials
+        validate_trading_credentials
+      end
+
       def post_info(body)
         with_rescue do
           response = connection.post do |req|

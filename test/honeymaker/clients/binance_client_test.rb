@@ -44,6 +44,27 @@ class Honeymaker::Clients::BinanceTest < Minitest::Test
     assert result.success?
   end
 
+  def test_account_trade_list
+    stub_connection(:get, [{ "symbol" => "BTCUSDT", "id" => 123, "price" => "50000" }])
+    result = @client.account_trade_list(symbol: "BTCUSDT")
+    assert result.success?
+    assert_equal "BTCUSDT", result.data.first["symbol"]
+  end
+
+  def test_deposit_history
+    stub_connection(:get, [{ "coin" => "BTC", "amount" => "0.5", "status" => 1 }])
+    result = @client.deposit_history
+    assert result.success?
+    assert_equal "BTC", result.data.first["coin"]
+  end
+
+  def test_withdraw_history
+    stub_connection(:get, [{ "coin" => "ETH", "amount" => "1.0", "status" => 6 }])
+    result = @client.withdraw_history
+    assert result.success?
+    assert_equal "ETH", result.data.first["coin"]
+  end
+
   def test_handles_api_error
     connection = stub
     connection.stubs(:get).raises(Faraday::ServerError.new("500", { status: 500, body: "Server Error" }))

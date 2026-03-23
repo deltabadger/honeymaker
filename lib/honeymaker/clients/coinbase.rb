@@ -108,6 +108,28 @@ module Honeymaker
         })
       end
 
+      def list_fills(product_id: nil, order_id: nil, start_sequence_timestamp: nil,
+                     end_sequence_timestamp: nil, limit: nil, cursor: nil)
+        with_rescue do
+          response = connection.get do |req|
+            req.url "/api/v3/brokerage/orders/historical/fills"
+            req.headers = auth_headers(req)
+            req.params = {
+              product_id: product_id, order_id: order_id,
+              start_sequence_timestamp: start_sequence_timestamp,
+              end_sequence_timestamp: end_sequence_timestamp,
+              limit: limit, cursor: cursor
+            }.compact
+            req.options.params_encoder = Faraday::FlatParamsEncoder
+          end
+          response.body
+        end
+      end
+
+      def list_transactions(account_id:, limit: nil, starting_after: nil)
+        get("/v2/accounts/#{account_id}/transactions", { limit: limit, starting_after: starting_after })
+      end
+
       private
 
       def get(path, params = {})
@@ -130,6 +152,19 @@ module Honeymaker
           end
           response.body
         end
+      end
+
+      def validate_trading_credentials
+        # List accounts — if it works, the key has trading access
+        result = list_accounts
+        return Result::Failure.new("Invalid trading credentials") if result.failure?
+        Result::Success.new(true)
+      end
+
+      def validate_read_credentials
+        result = get_api_key_permissions
+        return Result::Failure.new("Invalid read credentials") if result.failure?
+        Result::Success.new(true)
       end
 
       def auth_headers(req)

@@ -68,6 +68,16 @@ module Honeymaker
 
       private
 
+      def validate_trading_credentials
+        result = get_accounts(type: "trade")
+        return Result::Failure.new("Invalid trading credentials") if result.failure?
+        result.data["code"] == "200000" ? Result::Success.new(true) : Result::Failure.new("Invalid trading credentials")
+      end
+
+      def validate_read_credentials
+        validate_trading_credentials
+      end
+
       def get_public(path, params = {})
         with_rescue do
           response = connection.get do |req|

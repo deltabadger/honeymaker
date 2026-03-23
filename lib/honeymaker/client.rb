@@ -23,7 +23,29 @@ module Honeymaker
       @logger = logger
     end
 
+    def validate(type = :trading)
+      return Result::Failure.new("No credentials provided") unless authenticated?
+
+      case type
+      when :trading then validate_trading_credentials
+      when :read then validate_read_credentials
+      else raise Error, "Unknown validation type: #{type}. Use :trading or :read"
+      end
+    rescue Error
+      raise
+    rescue StandardError => e
+      Result::Failure.new(e.message)
+    end
+
     private
+
+    def validate_trading_credentials
+      raise NotImplementedError, "#{self.class} must implement #validate_trading_credentials"
+    end
+
+    def validate_read_credentials
+      raise NotImplementedError, "#{self.class} must implement #validate_read_credentials"
+    end
 
     def with_rescue
       Result::Success.new(yield)
