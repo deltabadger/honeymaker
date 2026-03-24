@@ -68,6 +68,14 @@ module Honeymaker
         })
       end
 
+      def get_historical_orders(symbol: nil, side: nil, start_at: nil, end_at: nil, current_page: nil, page_size: nil)
+        get_signed("/api/v1/hist-orders", {
+          symbol: symbol, side: side,
+          startAt: start_at, endAt: end_at,
+          currentPage: current_page, pageSize: page_size
+        })
+      end
+
       def get_deposits(currency: nil, start_at: nil, end_at: nil, status: nil, current_page: nil, page_size: nil)
         get_signed("/api/v1/deposits", {
           currency: currency, startAt: start_at, endAt: end_at,

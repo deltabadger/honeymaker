@@ -202,6 +202,115 @@ module Honeymaker
         end
       end
 
+      def convert_trade_flow(start_time:, end_time:, limit: 1000, recv_window: 5000)
+        with_rescue do
+          response = connection.get do |req|
+            req.url "/sapi/v1/convert/tradeFlow"
+            req.headers = headers
+            req.params = {
+              startTime: start_time, endTime: end_time,
+              limit: limit, recvWindow: recv_window, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
+      def fiat_payments(transaction_type:, begin_time: nil, end_time: nil, page: nil, rows: nil, recv_window: 5000)
+        with_rescue do
+          response = connection.get do |req|
+            req.url "/sapi/v1/fiat/payments"
+            req.headers = headers
+            req.params = {
+              transactionType: transaction_type,
+              beginTime: begin_time, endTime: end_time,
+              page: page, rows: rows,
+              recvWindow: recv_window, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
+      def fiat_orders(transaction_type:, begin_time: nil, end_time: nil, page: nil, rows: nil, recv_window: 5000)
+        with_rescue do
+          response = connection.get do |req|
+            req.url "/sapi/v1/fiat/orders"
+            req.headers = headers
+            req.params = {
+              transactionType: transaction_type,
+              beginTime: begin_time, endTime: end_time,
+              page: page, rows: rows,
+              recvWindow: recv_window, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
+      def dust_log(start_time: nil, end_time: nil, recv_window: 5000)
+        with_rescue do
+          response = connection.get do |req|
+            req.url "/sapi/v1/asset/dribblet"
+            req.headers = headers
+            req.params = {
+              startTime: start_time, endTime: end_time,
+              recvWindow: recv_window, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
+      def asset_dividend(asset: nil, start_time: nil, end_time: nil, limit: 500, recv_window: 5000)
+        with_rescue do
+          response = connection.get do |req|
+            req.url "/sapi/v1/asset/assetDividend"
+            req.headers = headers
+            req.params = {
+              asset: asset, startTime: start_time, endTime: end_time,
+              limit: limit, recvWindow: recv_window, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
+      def simple_earn_flexible_rewards(asset: nil, start_time: nil, end_time: nil, current: nil, size: nil)
+        with_rescue do
+          response = connection.get do |req|
+            req.url "/sapi/v1/simple-earn/flexible/history/rewardsRecord"
+            req.headers = headers
+            req.params = {
+              asset: asset, startTime: start_time, endTime: end_time,
+              current: current, size: size, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
+      def simple_earn_locked_rewards(asset: nil, start_time: nil, end_time: nil, current: nil, size: nil)
+        with_rescue do
+          response = connection.get do |req|
+            req.url "/sapi/v1/simple-earn/locked/history/rewardsRecord"
+            req.headers = headers
+            req.params = {
+              asset: asset, startTime: start_time, endTime: end_time,
+              current: current, size: size, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
       def get_all_coins_information(recv_window: 5000)
         with_rescue do
           response = connection.get do |req|

@@ -65,6 +65,49 @@ class Honeymaker::Clients::BinanceTest < Minitest::Test
     assert_equal "ETH", result.data.first["coin"]
   end
 
+  def test_convert_trade_flow
+    stub_connection(:get, { "list" => [{ "quoteId" => "q1", "fromAsset" => "BTC", "toAsset" => "USDT" }] })
+    result = @client.convert_trade_flow(start_time: 1710936000000, end_time: 1711022400000)
+    assert result.success?
+    assert_equal "q1", result.data["list"].first["quoteId"]
+  end
+
+  def test_fiat_payments
+    stub_connection(:get, { "data" => [{ "orderNo" => "f1", "cryptoCurrency" => "BTC" }] })
+    result = @client.fiat_payments(transaction_type: 0)
+    assert result.success?
+  end
+
+  def test_fiat_orders
+    stub_connection(:get, { "data" => [{ "orderNo" => "fo1", "fiatCurrency" => "USD" }] })
+    result = @client.fiat_orders(transaction_type: 0)
+    assert result.success?
+  end
+
+  def test_dust_log
+    stub_connection(:get, { "total" => 1, "userAssetDribblets" => [{ "totalTransferedAmount" => "0.001" }] })
+    result = @client.dust_log
+    assert result.success?
+  end
+
+  def test_asset_dividend
+    stub_connection(:get, { "rows" => [{ "asset" => "BNB", "amount" => "0.1" }], "total" => 1 })
+    result = @client.asset_dividend
+    assert result.success?
+  end
+
+  def test_simple_earn_flexible_rewards
+    stub_connection(:get, { "rows" => [{ "asset" => "USDT", "rewards" => "0.5" }], "total" => 1 })
+    result = @client.simple_earn_flexible_rewards
+    assert result.success?
+  end
+
+  def test_simple_earn_locked_rewards
+    stub_connection(:get, { "rows" => [{ "asset" => "ETH", "rewards" => "0.01" }], "total" => 1 })
+    result = @client.simple_earn_locked_rewards
+    assert result.success?
+  end
+
   def test_handles_api_error
     connection = stub
     connection.stubs(:get).raises(Faraday::ServerError.new("500", { status: 500, body: "Server Error" }))

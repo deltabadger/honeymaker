@@ -59,6 +59,12 @@ class Honeymaker::Clients::KucoinTest < Minitest::Test
     assert result.success?
   end
 
+  def test_get_historical_orders
+    stub_connection(:get, { "data" => { "items" => [{ "id" => "ho1", "symbol" => "BTC-USDT" }] } })
+    result = @client.get_historical_orders
+    assert result.success?
+  end
+
   def test_get_fills
     stub_connection(:get, { "data" => { "items" => [{ "tradeId" => "t1" }] } })
     result = @client.get_fills(symbol: "BTC-USDT")

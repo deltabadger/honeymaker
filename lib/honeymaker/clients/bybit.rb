@@ -61,6 +61,13 @@ module Honeymaker
         })
       end
 
+      def transaction_log(account_type: nil, category: nil, currency: nil, type: nil, start_time: nil, end_time: nil, limit: nil, cursor: nil)
+        get_authenticated("/v5/account/transaction-log", {
+          accountType: account_type, category: category, currency: currency, type: type,
+          startTime: start_time, endTime: end_time, limit: limit, cursor: cursor
+        })
+      end
+
       def execution_list(category:, symbol: nil, order_id: nil, start_time: nil, end_time: nil, limit: nil, cursor: nil)
         get_authenticated("/v5/execution/list", {
           category: category, symbol: symbol, orderId: order_id,

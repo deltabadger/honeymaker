@@ -60,6 +60,12 @@ class Honeymaker::Clients::BybitTest < Minitest::Test
     assert result.success?
   end
 
+  def test_transaction_log
+    stub_connection(:get, { "result" => { "list" => [{ "transactionTime" => "1710936000000" }] } })
+    result = @client.transaction_log
+    assert result.success?
+  end
+
   def test_execution_list
     stub_connection(:get, { "result" => { "list" => [{ "execId" => "e1" }] } })
     result = @client.execution_list(category: "spot")
