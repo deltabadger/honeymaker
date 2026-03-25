@@ -5,6 +5,7 @@ module Honeymaker
     class Bybit < Client
       URL = "https://api.bybit.com"
       RECV_WINDOW = "5000"
+      RATE_LIMITS = { default: 100, orders: 200 }.freeze
 
       def get_coin_query_info
         get_authenticated("/v5/asset/coin/query-info")
@@ -38,20 +39,54 @@ module Honeymaker
         get_authenticated("/v5/account/wallet-balance", { accountType: account_type, coin: coin })
       end
 
+      def get_balances(account_type: "UNIFIED")
+        result = wallet_balance(account_type: account_type)
+        return result if result.failure?
+
+        return Result::Failure.new(result.data["retMsg"]) unless result.data["retCode"]&.zero?
+
+        balances = {}
+        accounts = result.data.dig("result", "list") || []
+        accounts.each do |account|
+          (account["coin"] || []).each do |coin|
+            symbol = coin["coin"]
+            free = BigDecimal((coin["availableToWithdraw"] || "0").to_s)
+            locked = BigDecimal((coin["locked"] || "0").to_s)
+            next if free.zero? && locked.zero?
+            balances[symbol] = { free: free, locked: locked }
+          end
+        end
+
+        Result::Success.new(balances)
+      end
+
       def get_order(category:, order_id: nil, symbol: nil, order_link_id: nil)
-        get_authenticated("/v5/order/realtime", {
+        result = get_authenticated("/v5/order/realtime", {
           category: category, orderId: order_id, symbol: symbol, orderLinkId: order_link_id
         })
+        return result if result.failure?
+        return Result::Failure.new(result.data["retMsg"]) unless result.data["retCode"]&.zero?
+
+        order_list = result.data.dig("result", "list") || []
+        raw = order_list.first
+        return Result::Failure.new("Order not found") unless raw
+
+        Result::Success.new(normalize_order(raw["orderId"], raw))
       end
 
       def create_order(category:, symbol:, side:, order_type:, qty:, price: nil,
                        time_in_force: nil, market_unit: nil, order_link_id: nil)
-        post_authenticated("/v5/order/create", {
+        result = post_authenticated("/v5/order/create", {
           category: category, symbol: symbol, side: side,
           orderType: order_type, qty: qty, price: price,
           timeInForce: time_in_force, marketUnit: market_unit,
           orderLinkId: order_link_id
         })
+        return result if result.failure?
+        return Result::Failure.new(result.data["retMsg"]) unless result.data["retCode"]&.zero?
+
+        order_id = result.data.dig("result", "orderId")
+        Result::Success.new({ order_id: order_id, raw: result.data })
       end
 
       def cancel_order(category:, symbol:, order_id: nil, order_link_id: nil)
@@ -96,6 +131,46 @@ module Honeymaker
       end
 
       private
+
+      def normalize_order(order_id, raw)
+        order_type = parse_order_type(raw["orderType"])
+        side = raw["side"]&.downcase&.to_sym
+        status = parse_order_status(raw["orderStatus"])
+
+        price = BigDecimal((raw["avgPrice"] || "0").to_s)
+        price = BigDecimal((raw["price"] || "0").to_s) if price.zero?
+        price = nil if price.zero?
+
+        amount = BigDecimal((raw["qty"] || "0").to_s)
+        amount = nil if amount.zero?
+        amount_exec = BigDecimal((raw["cumExecQty"] || "0").to_s)
+        quote_amount_exec = BigDecimal((raw["cumExecValue"] || "0").to_s)
+
+        {
+          order_id: order_id, status: status, side: side, order_type: order_type,
+          price: price, amount: amount, quote_amount: nil,
+          amount_exec: amount_exec, quote_amount_exec: quote_amount_exec, raw: raw
+        }
+      end
+
+      def parse_order_type(type)
+        case type
+        when "Market" then :market
+        when "Limit" then :limit
+        else :unknown
+        end
+      end
+
+      def parse_order_status(status)
+        case status
+        when "Created", "Untriggered" then :unknown
+        when "New", "PartiallyFilled", "PartiallyFilledCanceled" then :open
+        when "Filled" then :closed
+        when "Cancelled", "Expired", "Deactivated" then :cancelled
+        when "Rejected" then :failed
+        else :unknown
+        end
+      end
 
       def validate_trading_credentials
         result = wallet_balance(account_type: "UNIFIED")

@@ -36,9 +36,14 @@ class Honeymaker::Clients::MexcTest < Minitest::Test
   end
 
   def test_query_order
-    stub_connection(:get, { "orderId" => "123", "status" => "FILLED" })
+    stub_connection(:get, {
+      "orderId" => "123", "symbol" => "BTCUSDT", "status" => "FILLED", "type" => "MARKET",
+      "side" => "BUY", "origQty" => "0.001", "executedQty" => "0.001",
+      "cummulativeQuoteQty" => "50", "price" => "50000"
+    })
     result = @client.query_order(symbol: "BTCUSDT", order_id: "123")
     assert result.success?
+    assert_equal :closed, result.data[:status]
   end
 
   def test_cancel_order

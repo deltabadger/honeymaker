@@ -17,19 +17,26 @@ class Honeymaker::Clients::CoinbaseTest < Minitest::Test
   end
 
   def test_get_order
-    stub_connection(:get, { "order" => { "order_id" => "abc", "status" => "FILLED" } })
+    stub_connection(:get, { "order" => {
+      "order_id" => "abc", "status" => "FILLED", "order_type" => "MARKET", "side" => "BUY",
+      "average_filled_price" => "50000", "filled_size" => "0.001",
+      "total_value_after_fees" => "50", "outstanding_hold_amount" => "0",
+      "order_configuration" => { "market_market_ioc" => { "quote_size" => "50" } }
+    } })
     result = @client.get_order(order_id: "abc")
     assert result.success?
-    assert_equal "abc", result.data["order"]["order_id"]
+    assert_equal "abc", result.data[:order_id]
+    assert_equal :closed, result.data[:status]
   end
 
   def test_create_order
-    stub_connection(:post, { "success" => true, "order_id" => "xyz" })
+    stub_connection(:post, { "success" => true, "success_response" => { "order_id" => "xyz" } })
     result = @client.create_order(
       client_order_id: "c1", product_id: "BTC-USD",
       side: "BUY", order_configuration: { market_market_ioc: { quote_size: "100" } }
     )
     assert result.success?
+    assert_equal "xyz", result.data[:order_id]
   end
 
   def test_cancel_orders

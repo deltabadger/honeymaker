@@ -31,7 +31,8 @@ class Honeymaker::Clients::KrakenTest < Minitest::Test
     stub_connection(:post, { "error" => [], "result" => { "txid" => ["ORDER-123"] } })
     result = @client.add_order(ordertype: "market", type: "buy", volume: "0.001", pair: "XBTUSDT")
     assert result.success?
-    assert_equal ["ORDER-123"], result.data["result"]["txid"]
+    assert_equal "ORDER-123", result.data[:order_id]
+    assert_equal ["ORDER-123"], result.data[:raw]["result"]["txid"]
   end
 
   def test_cancel_order

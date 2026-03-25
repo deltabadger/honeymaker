@@ -4,6 +4,7 @@ module Honeymaker
   module Clients
     class Bitget < Client
       URL = "https://api.bitget.com"
+      RATE_LIMITS = { default: 100, orders: 200 }.freeze
 
       attr_reader :passphrase
 
@@ -39,15 +40,46 @@ module Honeymaker
         get_signed("/api/v2/spot/account/assets", { coin: coin })
       end
 
+      def get_balances
+        result = get_account_assets
+        return result if result.failure?
+
+        return Result::Failure.new("Bitget API error") unless result.data["code"] == "00000"
+
+        balances = {}
+        (result.data["data"] || []).each do |asset|
+          symbol = asset["coin"]
+          free = BigDecimal((asset["available"] || "0").to_s)
+          locked = BigDecimal((asset["frozen"] || "0").to_s)
+          next if free.zero? && locked.zero?
+          balances[symbol] = { free: free, locked: locked }
+        end
+
+        Result::Success.new(balances)
+      end
+
       def place_order(symbol:, side:, order_type:, size: nil, quote_size: nil, price: nil, force: nil, client_oid: nil)
-        post_signed("/api/v2/spot/trade/place-order", {
+        result = post_signed("/api/v2/spot/trade/place-order", {
           symbol: symbol, side: side, orderType: order_type,
           size: size, quoteSize: quote_size, price: price, force: force, clientOid: client_oid
         })
+        return result if result.failure?
+        return Result::Failure.new("Bitget API error") unless result.data["code"] == "00000"
+
+        order_id = result.data.dig("data", "orderId")
+        Result::Success.new({ order_id: order_id, raw: result.data })
       end
 
       def get_order(order_id: nil, client_oid: nil)
-        get_signed("/api/v2/spot/trade/orderInfo", { orderId: order_id, clientOid: client_oid })
+        result = get_signed("/api/v2/spot/trade/orderInfo", { orderId: order_id, clientOid: client_oid })
+        return result if result.failure?
+        return Result::Failure.new("Bitget API error") unless result.data["code"] == "00000"
+
+        order_list = result.data["data"]
+        raw = order_list.is_a?(Array) ? order_list.first : order_list
+        return Result::Failure.new("Order not found") unless raw
+
+        Result::Success.new(normalize_order(raw["orderId"] || order_id, raw))
       end
 
       def cancel_order(symbol:, order_id: nil, client_oid: nil)
@@ -83,6 +115,44 @@ module Honeymaker
       end
 
       private
+
+      def normalize_order(order_id, raw)
+        order_type = parse_order_type(raw["orderType"])
+        side = raw["side"]&.downcase&.to_sym
+        status = parse_order_status(raw["status"])
+
+        price = BigDecimal((raw["priceAvg"] || raw["price"] || "0").to_s)
+        price = nil if price.zero?
+
+        amount = raw["size"] ? BigDecimal(raw["size"].to_s) : nil
+        quote_amount = raw["quoteSize"] ? BigDecimal(raw["quoteSize"].to_s) : nil
+        amount_exec = BigDecimal((raw["baseVolume"] || "0").to_s)
+        quote_amount_exec = BigDecimal((raw["quoteVolume"] || "0").to_s)
+
+        {
+          order_id: order_id, status: status, side: side, order_type: order_type,
+          price: price, amount: amount, quote_amount: quote_amount,
+          amount_exec: amount_exec, quote_amount_exec: quote_amount_exec, raw: raw
+        }
+      end
+
+      def parse_order_type(type)
+        case type&.downcase
+        when "market" then :market
+        when "limit" then :limit
+        else :unknown
+        end
+      end
+
+      def parse_order_status(status)
+        case status
+        when "init", "new" then :unknown
+        when "partial_fill", "live" then :open
+        when "full_fill" then :closed
+        when "cancelled" then :cancelled
+        else :unknown
+        end
+      end
 
       def validate_trading_credentials
         result = get_account_assets

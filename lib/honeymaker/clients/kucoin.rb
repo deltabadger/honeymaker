@@ -4,6 +4,7 @@ module Honeymaker
   module Clients
     class Kucoin < Client
       URL = "https://api.kucoin.com"
+      RATE_LIMITS = { default: 100, orders: 200 }.freeze
 
       attr_reader :passphrase
 
@@ -34,17 +35,47 @@ module Honeymaker
         get_signed("/api/v1/accounts", { currency: currency, type: type })
       end
 
+      def get_balances(type: "trade")
+        result = get_accounts(type: type)
+        return result if result.failure?
+
+        return Result::Failure.new("KuCoin API error") unless result.data["code"] == "200000"
+
+        balances = {}
+        (result.data["data"] || []).each do |account|
+          symbol = account["currency"]
+          free = BigDecimal((account["available"] || "0").to_s)
+          locked = BigDecimal((account["holds"] || "0").to_s)
+          next if free.zero? && locked.zero?
+          balances[symbol] = { free: free, locked: locked }
+        end
+
+        Result::Success.new(balances)
+      end
+
       def place_order(client_oid:, side:, symbol:, type:, size: nil, funds: nil, price: nil,
                       time_in_force: nil, stp: nil)
-        post_signed("/api/v1/orders", {
+        result = post_signed("/api/v1/orders", {
           clientOid: client_oid, side: side, symbol: symbol, type: type,
           size: size, funds: funds, price: price,
           timeInForce: time_in_force, stp: stp
         })
+        return result if result.failure?
+        return Result::Failure.new("KuCoin API error") unless result.data["code"] == "200000"
+
+        order_id = result.data.dig("data", "orderId")
+        Result::Success.new({ order_id: order_id, raw: result.data })
       end
 
       def get_order(order_id:)
-        get_signed("/api/v1/orders/#{order_id}")
+        result = get_signed("/api/v1/orders/#{order_id}")
+        return result if result.failure?
+        return Result::Failure.new("KuCoin API error") unless result.data["code"] == "200000"
+
+        raw = result.data["data"]
+        return Result::Failure.new("Order not found") unless raw
+
+        Result::Success.new(normalize_order(order_id, raw))
       end
 
       def cancel_order(order_id:)
@@ -98,6 +129,44 @@ module Honeymaker
       end
 
       private
+
+      def normalize_order(order_id, raw)
+        order_type = parse_order_type(raw["type"])
+        side = raw["side"]&.downcase&.to_sym
+        status = parse_order_status(raw)
+
+        deal_funds = BigDecimal((raw["dealFunds"] || "0").to_s)
+        deal_size = BigDecimal((raw["dealSize"] || "0").to_s)
+        price = deal_funds.positive? && deal_size.positive? ? deal_funds / deal_size : BigDecimal((raw["price"] || "0").to_s)
+        price = nil if price.zero?
+
+        amount = raw["size"] ? BigDecimal(raw["size"].to_s) : nil
+        quote_amount = raw["funds"] ? BigDecimal(raw["funds"].to_s) : nil
+
+        {
+          order_id: order_id, status: status, side: side, order_type: order_type,
+          price: price, amount: amount, quote_amount: quote_amount,
+          amount_exec: deal_size, quote_amount_exec: deal_funds, raw: raw
+        }
+      end
+
+      def parse_order_type(type)
+        case type&.downcase
+        when "market" then :market
+        when "limit" then :limit
+        else :unknown
+        end
+      end
+
+      def parse_order_status(raw)
+        if raw["cancelExist"]
+          :cancelled
+        elsif raw["isActive"]
+          :open
+        else
+          BigDecimal((raw["dealSize"] || "0").to_s).positive? ? :closed : :unknown
+        end
+      end
 
       def validate_trading_credentials
         result = get_accounts(type: "trade")

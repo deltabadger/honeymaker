@@ -4,6 +4,7 @@ module Honeymaker
   module Clients
     class BingX < Client
       URL = "https://open-api.bingx.com"
+      RATE_LIMITS = { default: 100, orders: 200 }.freeze
 
       def get_symbols
         get_public("/openApi/spot/v1/common/symbols")
@@ -24,24 +25,50 @@ module Honeymaker
         })
       end
 
-      def get_balances
+      def get_raw_balances
         get_signed("/openApi/spot/v1/account/balance")
+      end
+
+      def get_balances
+        result = get_raw_balances
+        return result if result.failure?
+
+        balances = {}
+        raw_balances = result.data.dig("data", "balances") || []
+        raw_balances.each do |balance|
+          symbol = balance["asset"]
+          free = BigDecimal((balance["free"] || "0").to_s)
+          locked = BigDecimal((balance["locked"] || "0").to_s)
+          next if free.zero? && locked.zero?
+          balances[symbol] = { free: free, locked: locked }
+        end
+
+        Result::Success.new(balances)
       end
 
       def place_order(symbol:, side:, type:, quantity: nil, quote_order_qty: nil, price: nil,
                       time_in_force: nil, client_order_id: nil)
-        post_signed("/openApi/spot/v1/trade/order", {
+        result = post_signed("/openApi/spot/v1/trade/order", {
           symbol: symbol, side: side, type: type,
           quantity: quantity, quoteOrderQty: quote_order_qty,
           price: price, timeInForce: time_in_force,
           newClientOrderId: client_order_id
         })
+        return result if result.failure?
+
+        raw = result.data
+        order_id = raw.dig("data", "orderId") || raw.dig("data", "data", "orderId")
+        Result::Success.new({ order_id: "#{symbol}-#{order_id}", raw: raw })
       end
 
       def get_order(symbol:, order_id: nil, client_order_id: nil)
-        get_signed("/openApi/spot/v1/trade/query", {
+        result = get_signed("/openApi/spot/v1/trade/query", {
           symbol: symbol, orderId: order_id, clientOrderID: client_order_id
         })
+        return result if result.failure?
+
+        raw = result.data.is_a?(Hash) && result.data.key?("data") ? result.data["data"] : result.data
+        Result::Success.new(normalize_order("#{symbol}-#{raw['orderId']}", raw))
       end
 
       def cancel_order(symbol:, order_id: nil, client_order_id: nil)
@@ -80,8 +107,53 @@ module Honeymaker
 
       private
 
+      def normalize_order(order_id, raw)
+        order_type = parse_order_type(raw["type"])
+        side = raw["side"]&.downcase&.to_sym
+        status = parse_order_status(raw["status"])
+
+        amount = BigDecimal((raw["origQty"] || "0").to_s)
+        amount = nil if amount.zero?
+        quote_amount = raw["origQuoteOrderQty"] ? BigDecimal(raw["origQuoteOrderQty"].to_s) : nil
+        quote_amount = nil if quote_amount&.zero?
+
+        amount_exec = BigDecimal((raw["executedQty"] || "0").to_s)
+        quote_amount_exec = BigDecimal((raw["cummulativeQuoteQty"] || "0").to_s)
+        quote_amount_exec = nil if quote_amount_exec.negative?
+
+        price = BigDecimal((raw["price"] || "0").to_s)
+        if price.zero? && quote_amount_exec&.positive? && amount_exec.positive?
+          price = quote_amount_exec / amount_exec
+        end
+        price = nil if price.zero?
+
+        {
+          order_id: order_id, status: status, side: side, order_type: order_type,
+          price: price, amount: amount, quote_amount: quote_amount,
+          amount_exec: amount_exec, quote_amount_exec: quote_amount_exec, raw: raw
+        }
+      end
+
+      def parse_order_type(type)
+        case type
+        when "MARKET" then :market
+        when "LIMIT" then :limit
+        else :unknown
+        end
+      end
+
+      def parse_order_status(status)
+        case status
+        when "NEW", "PARTIALLY_FILLED", "PENDING" then :open
+        when "FILLED" then :closed
+        when "CANCELED", "EXPIRED" then :cancelled
+        when "REJECTED", "FAILED" then :failed
+        else :unknown
+        end
+      end
+
       def validate_trading_credentials
-        result = get_balances
+        result = get_raw_balances
         return Result::Failure.new("Invalid trading credentials") if result.failure?
         result.data["code"]&.to_i&.zero? ? Result::Success.new(true) : Result::Failure.new("Invalid trading credentials")
       end

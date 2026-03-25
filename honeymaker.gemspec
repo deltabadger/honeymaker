@@ -33,4 +33,5 @@ Gem::Specification.new do |spec|
   spec.add_dependency "faraday-net_http_persistent", "~> 2.0"
   spec.add_dependency "net-http-persistent", "~> 4.0"
   spec.add_dependency "jwt", "~> 2.0"
+  spec.add_dependency "bigdecimal"
 end

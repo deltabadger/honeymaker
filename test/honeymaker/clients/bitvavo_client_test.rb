@@ -23,9 +23,9 @@ class Honeymaker::Clients::BitvavoTest < Minitest::Test
     assert result.success?
   end
 
-  def test_get_balance
+  def test_get_raw_balance
     stub_connection(:get, [{ "symbol" => "BTC", "available" => "0.5" }])
-    result = @client.get_balance
+    result = @client.get_raw_balance
     assert result.success?
   end
 

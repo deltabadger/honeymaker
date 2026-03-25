@@ -22,13 +22,20 @@ class Honeymaker::Clients::BinanceTest < Minitest::Test
     stub_connection(:post, { "orderId" => 123, "status" => "FILLED" })
     result = @client.new_order(symbol: "BTCUSDT", side: "BUY", type: "MARKET", quantity: "0.001")
     assert result.success?
-    assert_equal 123, result.data["orderId"]
+    assert_equal "BTCUSDT-123", result.data[:order_id]
+    assert_equal 123, result.data[:raw]["orderId"]
   end
 
   def test_query_order
-    stub_connection(:get, { "orderId" => 123, "status" => "FILLED" })
+    stub_connection(:get, {
+      "orderId" => 123, "symbol" => "BTCUSDT", "status" => "FILLED", "type" => "MARKET",
+      "side" => "BUY", "origQty" => "0.001", "origQuoteOrderQty" => "0",
+      "executedQty" => "0.001", "cummulativeQuoteQty" => "50", "price" => "50000"
+    })
     result = @client.query_order(symbol: "BTCUSDT", order_id: 123)
     assert result.success?
+    assert_equal :closed, result.data[:status]
+    assert_equal :buy, result.data[:side]
   end
 
   def test_account_information

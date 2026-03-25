@@ -3,6 +3,7 @@
 require "openssl"
 require "base64"
 require "securerandom"
+require "bigdecimal"
 
 module Honeymaker
   class Client
@@ -14,6 +15,11 @@ module Honeymaker
       }
     }.freeze
 
+    RATE_LIMITS = {
+      default: 100,
+      orders: 100
+    }.freeze
+
     attr_reader :api_key, :api_secret
 
     def initialize(api_key: nil, api_secret: nil, proxy: nil, logger: nil)
@@ -21,6 +27,14 @@ module Honeymaker
       @api_secret = api_secret
       @proxy = proxy
       @logger = logger
+    end
+
+    def self.rate_limits
+      self::RATE_LIMITS
+    end
+
+    def get_balances
+      raise NotImplementedError, "#{self.class} must implement #get_balances"
     end
 
     def validate(type = :trading)

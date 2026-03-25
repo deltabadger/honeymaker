@@ -8,11 +8,30 @@ module Honeymaker
     class Kraken < Client
       URL = "https://api.kraken.com"
 
+      RATE_LIMITS = { default: 1000, orders: 1000 }.freeze
+
+      ASSET_MAP = {
+        "ZUSD" => "USD", "ZEUR" => "EUR", "ZGBP" => "GBP",
+        "ZJPY" => "JPY", "ZCHF" => "CHF", "ZCAD" => "CAD",
+        "ZAUD" => "AUD", "XXBT" => "XBT", "XETH" => "ETH",
+        "XXDG" => "XDG"
+      }.freeze
+
       def query_orders_info(txid:, trades: nil, userref: nil, consolidate_taker: true)
-        post_private("/0/private/QueryOrders", {
+        result = post_private("/0/private/QueryOrders", {
           nonce: nonce, trades: trades, userref: userref,
           txid: txid, consolidate_taker: consolidate_taker
         })
+        return result if result.failure?
+
+        errors = result.data["error"]
+        return Result::Failure.new(*errors) if errors.is_a?(Array) && errors.any?
+
+        orders = {}
+        (result.data["result"] || {}).each do |order_id, raw|
+          orders[order_id] = normalize_order(order_id, raw)
+        end
+        Result::Success.new(orders)
       end
 
       def add_order(ordertype:, type:, volume:, pair:, userref: nil, cl_ord_id: nil,
@@ -20,7 +39,7 @@ module Honeymaker
                     reduce_only: nil, stptype: nil, oflags: [], timeinforce: nil,
                     starttm: nil, expiretm: nil, close: nil, close_price: nil,
                     close_price2: nil, deadline: nil, validate: nil)
-        post_private("/0/private/AddOrder", {
+        result = post_private("/0/private/AddOrder", {
           "nonce" => nonce, "ordertype" => ordertype, "type" => type,
           "volume" => volume, "pair" => pair, "userref" => userref,
           "cl_ord_id" => cl_ord_id, "displayvol" => displayvol,
@@ -33,6 +52,13 @@ module Honeymaker
           "close[price]" => close_price, "close[price2]" => close_price2,
           "deadline" => deadline, "validate" => validate
         })
+        return result if result.failure?
+
+        errors = result.data["error"]
+        return Result::Failure.new(*errors) if errors.is_a?(Array) && errors.any?
+
+        txid = (result.data.dig("result", "txid") || []).first
+        Result::Success.new({ order_id: txid, raw: result.data })
       end
 
       def cancel_order(txid: nil, cl_ord_id: nil)
@@ -55,6 +81,26 @@ module Honeymaker
 
       def get_extended_balance
         post_private("/0/private/BalanceEx", { nonce: nonce })
+      end
+
+      def get_balances
+        result = get_extended_balance
+        return result if result.failure?
+
+        errors = result.data["error"]
+        return Result::Failure.new(*errors) if errors.is_a?(Array) && errors.any?
+
+        balances = {}
+        (result.data["result"] || {}).each do |symbol, balance|
+          mapped_symbol = ASSET_MAP[symbol.split(".").first] || symbol.split(".").first
+          total = BigDecimal(balance["balance"].to_s)
+          locked = BigDecimal((balance["hold_trade"] || "0").to_s)
+          free = total - locked
+          next if free.zero? && locked.zero?
+          balances[mapped_symbol] = { free: free, locked: locked }
+        end
+
+        Result::Success.new(balances)
       end
 
       def get_ohlc_data(pair:, interval: nil, since: nil)
@@ -88,6 +134,60 @@ module Honeymaker
       end
 
       private
+
+      def normalize_order(order_id, raw)
+        descr = raw["descr"] || {}
+        order_type = parse_order_type(descr["ordertype"])
+        side = descr["type"]&.downcase&.to_sym
+        status = parse_order_status(raw["status"])
+
+        order_flags = (raw["oflags"] || "").split(",")
+        if order_flags.include?("viqc")
+          amount = nil
+          quote_amount = BigDecimal(raw["vol"].to_s)
+        else
+          amount = BigDecimal(raw["vol"].to_s)
+          quote_amount = nil
+        end
+
+        amount_exec = BigDecimal(raw["vol_exec"].to_s)
+        quote_amount_exec = BigDecimal(raw["cost"].to_s)
+
+        price = BigDecimal(raw["price"].to_s)
+        price = BigDecimal(descr["price"].to_s) if price.zero? && order_type == :limit
+        price = nil if price.zero?
+
+        {
+          order_id: order_id,
+          status: status,
+          side: side,
+          order_type: order_type,
+          price: price,
+          amount: amount,
+          quote_amount: quote_amount,
+          amount_exec: amount_exec,
+          quote_amount_exec: quote_amount_exec,
+          raw: raw
+        }
+      end
+
+      def parse_order_type(type)
+        case type
+        when "market" then :market
+        when "limit" then :limit
+        else :unknown
+        end
+      end
+
+      def parse_order_status(status)
+        case status
+        when "pending" then :unknown
+        when "open" then :open
+        when "closed" then :closed
+        when "canceled", "expired" then :cancelled
+        else :unknown
+        end
+      end
 
       def validate_trading_credentials
         result = get_extended_balance

@@ -5,6 +5,7 @@ module Honeymaker
     class Bitvavo < Client
       URL = "https://api.bitvavo.com"
       ACCESS_WINDOW = "10000"
+      RATE_LIMITS = { default: 100, orders: 100 }.freeze
 
       def get_assets
         get_public("/v2/assets")
@@ -28,21 +29,46 @@ module Honeymaker
         })
       end
 
-      def get_balance(symbol: nil)
+      def get_raw_balance(symbol: nil)
         get_signed("/v2/balance", { symbol: symbol })
+      end
+
+      def get_balances
+        result = get_raw_balance
+        return result if result.failure?
+
+        balances = {}
+        Array(result.data).each do |balance|
+          symbol = balance["symbol"]
+          next unless symbol
+          free = BigDecimal((balance["available"] || "0").to_s)
+          locked = BigDecimal((balance["inOrder"] || "0").to_s)
+          next if free.zero? && locked.zero?
+          balances[symbol] = { free: free, locked: locked }
+        end
+
+        Result::Success.new(balances)
       end
 
       def place_order(market:, side:, order_type:, amount: nil, amount_quote: nil, price: nil,
                       time_in_force: nil, client_order_id: nil)
-        post_signed("/v2/order", {
+        result = post_signed("/v2/order", {
           market: market, side: side, orderType: order_type,
           amount: amount, amountQuote: amount_quote, price: price,
           timeInForce: time_in_force, clientOrderId: client_order_id
         })
+        return result if result.failure?
+
+        raw = result.data
+        Result::Success.new({ order_id: "#{raw['market']}-#{raw['orderId']}", raw: raw })
       end
 
       def get_order(market:, order_id:)
-        get_signed("/v2/order", { market: market, orderId: order_id })
+        result = get_signed("/v2/order", { market: market, orderId: order_id })
+        return result if result.failure?
+
+        raw = result.data
+        Result::Success.new(normalize_order("#{raw['market']}-#{raw['orderId']}", raw))
       end
 
       def cancel_order(market:, order_id:)
@@ -72,8 +98,52 @@ module Honeymaker
 
       private
 
+      def normalize_order(order_id, raw)
+        order_type = parse_order_type(raw["orderType"])
+        side = raw["side"]&.downcase&.to_sym
+        status = parse_order_status(raw["status"])
+
+        price = BigDecimal((raw["price"] || "0").to_s)
+        amount = BigDecimal((raw["amount"] || "0").to_s)
+        amount = nil if amount.zero?
+        amount_quote = BigDecimal((raw["amountQuote"] || "0").to_s)
+        amount_quote = nil if amount_quote.zero?
+
+        amount_exec = BigDecimal((raw["filledAmount"] || "0").to_s)
+        quote_amount_exec = BigDecimal((raw["filledAmountQuote"] || "0").to_s)
+
+        if price.zero? && quote_amount_exec.positive? && amount_exec.positive?
+          price = quote_amount_exec / amount_exec
+        end
+        price = nil if price.zero?
+
+        {
+          order_id: order_id, status: status, side: side, order_type: order_type,
+          price: price, amount: amount, quote_amount: amount_quote,
+          amount_exec: amount_exec, quote_amount_exec: quote_amount_exec, raw: raw
+        }
+      end
+
+      def parse_order_type(type)
+        case type
+        when "market" then :market
+        when "limit" then :limit
+        else :unknown
+        end
+      end
+
+      def parse_order_status(status)
+        case status
+        when "new", "partiallyFilled" then :open
+        when "filled" then :closed
+        when "canceled", "cancelled", "expired" then :cancelled
+        when "rejected" then :failed
+        else :unknown
+        end
+      end
+
       def validate_trading_credentials
-        result = get_balance
+        result = get_raw_balance
         result.success? ? Result::Success.new(true) : Result::Failure.new("Invalid trading credentials")
       end
 

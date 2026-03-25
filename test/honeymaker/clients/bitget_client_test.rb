@@ -36,21 +36,27 @@ class Honeymaker::Clients::BitgetTest < Minitest::Test
   end
 
   def test_place_order
-    stub_connection(:post, { "data" => { "orderId" => "123" } })
+    stub_connection(:post, { "code" => "00000", "data" => { "orderId" => "123" } })
     result = @client.place_order(symbol: "BTCUSDT", side: "buy", order_type: "market", size: "0.001")
     assert result.success?
+    assert_equal "123", result.data[:order_id]
   end
 
   def test_place_order_with_quote_size
-    stub_connection(:post, { "data" => { "orderId" => "456" } })
+    stub_connection(:post, { "code" => "00000", "data" => { "orderId" => "456" } })
     result = @client.place_order(symbol: "BTCUSDT", side: "buy", order_type: "market", quote_size: "100")
     assert result.success?
+    assert_equal "456", result.data[:order_id]
   end
 
   def test_get_order
-    stub_connection(:get, { "data" => [{ "orderId" => "123" }] })
+    stub_connection(:get, { "code" => "00000", "data" => [{
+      "orderId" => "123", "orderType" => "market", "side" => "buy", "status" => "full_fill",
+      "priceAvg" => "50000", "size" => "0.001", "baseVolume" => "0.001", "quoteVolume" => "50"
+    }] })
     result = @client.get_order(order_id: "123")
     assert result.success?
+    assert_equal :closed, result.data[:status]
   end
 
   def test_cancel_order

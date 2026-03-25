@@ -36,15 +36,20 @@ class Honeymaker::Clients::BitMartTest < Minitest::Test
   end
 
   def test_submit_order
-    stub_connection(:post, { "data" => { "order_id" => 123 } })
+    stub_connection(:post, { "code" => 1000, "data" => { "order_id" => 123 } })
     result = @client.submit_order(symbol: "BTC_USDT", side: "buy", type: "market", notional: "100")
     assert result.success?
+    assert_equal "123", result.data[:order_id]
   end
 
   def test_get_order
-    stub_connection(:post, { "data" => { "order_id" => 123 } })
+    stub_connection(:post, { "code" => 1000, "data" => {
+      "symbol" => "BTC_USDT", "type" => "market", "side" => "buy", "status" => "filled",
+      "size" => "0.001", "filled_size" => "0.001", "filled_notional" => "50", "price" => "50000"
+    } })
     result = @client.get_order(order_id: "123")
     assert result.success?
+    assert_equal :closed, result.data[:status]
   end
 
   def test_cancel_order

@@ -30,16 +30,20 @@ class Honeymaker::Clients::BybitTest < Minitest::Test
   end
 
   def test_create_order
-    stub_connection(:post, { "result" => { "orderId" => "123" } })
+    stub_connection(:post, { "retCode" => 0, "retMsg" => "OK", "result" => { "orderId" => "123" } })
     result = @client.create_order(category: "spot", symbol: "BTCUSDT", side: "Buy", order_type: "Market", qty: "0.001")
     assert result.success?
-    assert_equal "123", result.data["result"]["orderId"]
+    assert_equal "123", result.data[:order_id]
   end
 
   def test_get_order
-    stub_connection(:get, { "result" => { "list" => [{ "orderId" => "123" }] } })
+    stub_connection(:get, { "retCode" => 0, "retMsg" => "OK", "result" => { "list" => [{
+      "orderId" => "123", "orderType" => "Market", "side" => "Buy", "orderStatus" => "Filled",
+      "avgPrice" => "50000", "qty" => "0.001", "cumExecQty" => "0.001", "cumExecValue" => "50"
+    }] } })
     result = @client.get_order(category: "spot", order_id: "123")
     assert result.success?
+    assert_equal :closed, result.data[:status]
   end
 
   def test_cancel_order

@@ -36,15 +36,21 @@ class Honeymaker::Clients::KucoinTest < Minitest::Test
   end
 
   def test_place_order
-    stub_connection(:post, { "data" => { "orderId" => "123" } })
+    stub_connection(:post, { "code" => "200000", "data" => { "orderId" => "123" } })
     result = @client.place_order(client_oid: "c1", side: "buy", symbol: "BTC-USDT", type: "market", funds: "100")
     assert result.success?
+    assert_equal "123", result.data[:order_id]
   end
 
   def test_get_order
-    stub_connection(:get, { "data" => { "id" => "123", "isActive" => false } })
+    stub_connection(:get, { "code" => "200000", "data" => {
+      "id" => "123", "symbol" => "BTC-USDT", "type" => "market", "side" => "buy",
+      "isActive" => false, "cancelExist" => false, "dealSize" => "0.001",
+      "dealFunds" => "50", "size" => "0.001", "price" => "50000"
+    } })
     result = @client.get_order(order_id: "123")
     assert result.success?
+    assert_equal :closed, result.data[:status]
   end
 
   def test_cancel_order

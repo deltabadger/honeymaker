@@ -4,6 +4,7 @@ module Honeymaker
   module Clients
     class Bitrue < Client
       URL = "https://openapi.bitrue.com"
+      RATE_LIMITS = { default: 100, orders: 200 }.freeze
 
       def exchange_information
         get_public("/api/v1/exchangeInfo")
@@ -28,21 +29,45 @@ module Honeymaker
         get_signed("/api/v1/account", { recvWindow: recv_window })
       end
 
+      def get_balances
+        result = account_information
+        return result if result.failure?
+
+        balances = {}
+        Array(result.data["balances"]).each do |balance|
+          symbol = balance["asset"]
+          free = BigDecimal(balance["free"].to_s)
+          locked = BigDecimal(balance["locked"].to_s)
+          next if free.zero? && locked.zero?
+          balances[symbol] = { free: free, locked: locked }
+        end
+
+        Result::Success.new(balances)
+      end
+
       def query_order(symbol:, order_id: nil, orig_client_order_id: nil, recv_window: 5000)
-        get_signed("/api/v1/order", {
+        result = get_signed("/api/v1/order", {
           symbol: symbol, orderId: order_id,
           origClientOrderId: orig_client_order_id, recvWindow: recv_window
         })
+        return result if result.failure?
+
+        raw = result.data
+        Result::Success.new(normalize_order("#{symbol}-#{raw['orderId']}", raw))
       end
 
       def new_order(symbol:, side:, type:, time_in_force: nil, quantity: nil, quote_order_qty: nil,
                     price: nil, new_client_order_id: nil, recv_window: 5000)
-        post_signed("/api/v1/order", {
+        result = post_signed("/api/v1/order", {
           symbol: symbol, side: side, type: type,
           timeInForce: time_in_force, quantity: quantity,
           quoteOrderQty: quote_order_qty, price: price,
           newClientOrderId: new_client_order_id, recvWindow: recv_window
         })
+        return result if result.failure?
+
+        raw = result.data
+        Result::Success.new({ order_id: "#{symbol}-#{raw['orderId']}", raw: raw })
       end
 
       def cancel_order(symbol:, order_id: nil, orig_client_order_id: nil, recv_window: 5000)
@@ -60,6 +85,51 @@ module Honeymaker
       end
 
       private
+
+      def normalize_order(order_id, raw)
+        order_type = parse_order_type(raw["type"])
+        side = raw["side"]&.downcase&.to_sym
+        status = parse_order_status(raw["status"])
+
+        amount = BigDecimal((raw["origQty"] || "0").to_s)
+        amount = nil if amount.zero?
+        quote_amount = raw["origQuoteOrderQty"] ? BigDecimal(raw["origQuoteOrderQty"].to_s) : nil
+        quote_amount = nil if quote_amount&.zero?
+
+        amount_exec = BigDecimal((raw["executedQty"] || "0").to_s)
+        quote_amount_exec = BigDecimal((raw["cummulativeQuoteQty"] || "0").to_s)
+        quote_amount_exec = nil if quote_amount_exec.negative?
+
+        price = BigDecimal((raw["price"] || "0").to_s)
+        if price.zero? && quote_amount_exec&.positive? && amount_exec.positive?
+          price = quote_amount_exec / amount_exec
+        end
+        price = nil if price.zero?
+
+        {
+          order_id: order_id, status: status, side: side, order_type: order_type,
+          price: price, amount: amount, quote_amount: quote_amount,
+          amount_exec: amount_exec, quote_amount_exec: quote_amount_exec, raw: raw
+        }
+      end
+
+      def parse_order_type(type)
+        case type
+        when "MARKET" then :market
+        when "LIMIT" then :limit
+        else :unknown
+        end
+      end
+
+      def parse_order_status(status)
+        case status
+        when "NEW", "PARTIALLY_FILLED" then :open
+        when "FILLED" then :closed
+        when "CANCELED", "EXPIRED" then :cancelled
+        when "REJECTED" then :failed
+        else :unknown
+        end
+      end
 
       def validate_trading_credentials
         result = account_information

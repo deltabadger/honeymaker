@@ -4,6 +4,7 @@ module Honeymaker
   module Clients
     class Binance < Client
       URL = "https://api.binance.com"
+      RATE_LIMITS = { default: 100, orders: 200 }.freeze
 
       def exchange_information(symbol: nil, symbols: nil, permissions: nil, show_permission_sets: nil, symbol_status: nil)
         with_rescue do
@@ -75,6 +76,22 @@ module Honeymaker
         end
       end
 
+      def get_balances
+        result = account_information(omit_zero_balances: true)
+        return result if result.failure?
+
+        balances = {}
+        Array(result.data["balances"]).each do |balance|
+          symbol = balance["asset"]
+          free = BigDecimal(balance["free"].to_s)
+          locked = BigDecimal(balance["locked"].to_s)
+          next if free.zero? && locked.zero?
+          balances[symbol] = { free: free, locked: locked }
+        end
+
+        Result::Success.new(balances)
+      end
+
       def account_trade_list(symbol:, order_id: nil, start_time: nil, end_time: nil, from_id: nil, limit: 500, recv_window: 5000)
         with_rescue do
           response = connection.get do |req|
@@ -104,7 +121,8 @@ module Honeymaker
             }.compact
             req.params[:signature] = sign_params(req.params)
           end
-          response.body
+          raw = response.body
+          normalize_order("#{symbol}-#{raw['orderId']}", raw)
         end
       end
 
@@ -145,7 +163,8 @@ module Honeymaker
             }.compact
             req.params[:signature] = sign_params(req.params)
           end
-          response.body
+          raw = response.body
+          { order_id: "#{symbol}-#{raw['orderId']}", raw: raw }
         end
       end
 
@@ -364,6 +383,59 @@ module Honeymaker
       end
 
       private
+
+      def normalize_order(order_id, raw)
+        order_type = parse_order_type(raw["type"])
+        side = raw["side"]&.downcase&.to_sym
+        status = parse_order_status(raw["status"])
+
+        amount = BigDecimal(raw["origQty"].to_s)
+        amount = nil if amount.zero?
+        quote_amount = BigDecimal(raw["origQuoteOrderQty"].to_s)
+        quote_amount = nil if quote_amount.zero?
+
+        amount_exec = BigDecimal(raw["executedQty"].to_s)
+        quote_amount_exec = BigDecimal(raw["cummulativeQuoteQty"].to_s)
+        quote_amount_exec = nil if quote_amount_exec.negative?
+
+        price = BigDecimal(raw["price"].to_s)
+        if price.zero? && quote_amount_exec&.positive? && amount_exec.positive?
+          price = quote_amount_exec / amount_exec
+        end
+        price = nil if price.zero?
+
+        {
+          order_id: order_id,
+          status: status,
+          side: side,
+          order_type: order_type,
+          price: price,
+          amount: amount,
+          quote_amount: quote_amount,
+          amount_exec: amount_exec,
+          quote_amount_exec: quote_amount_exec,
+          raw: raw
+        }
+      end
+
+      def parse_order_type(type)
+        case type
+        when "MARKET" then :market
+        when "LIMIT" then :limit
+        else :unknown
+        end
+      end
+
+      def parse_order_status(status)
+        case status
+        when "PENDING_CANCEL" then :unknown
+        when "NEW", "PENDING_NEW", "PARTIALLY_FILLED" then :open
+        when "FILLED" then :closed
+        when "CANCELED", "EXPIRED", "EXPIRED_IN_MATCH" then :cancelled
+        when "REJECTED" then :failed
+        else :unknown
+        end
+      end
 
       def validate_trading_credentials
         # Try cancelling a non-existent order — error -2011 (ORDER_DOES_NOT_EXIST) means key is valid with trade permission

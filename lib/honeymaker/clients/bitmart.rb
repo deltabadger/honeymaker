@@ -4,6 +4,7 @@ module Honeymaker
   module Clients
     class BitMart < Client
       URL = "https://api-cloud.bitmart.com"
+      RATE_LIMITS = { default: 100, orders: 200 }.freeze
 
       attr_reader :memo
 
@@ -34,16 +35,46 @@ module Honeymaker
         get_signed("/spot/v1/wallet")
       end
 
+      def get_balances
+        result = get_wallet
+        return result if result.failure?
+
+        return Result::Failure.new("BitMart API error") unless result.data["code"] == 1000
+
+        balances = {}
+        (result.data.dig("data", "wallet") || []).each do |wallet|
+          symbol = wallet["id"]
+          free = BigDecimal((wallet["available"] || "0").to_s)
+          locked = BigDecimal((wallet["frozen"] || "0").to_s)
+          next if free.zero? && locked.zero?
+          balances[symbol] = { free: free, locked: locked }
+        end
+
+        Result::Success.new(balances)
+      end
+
       def submit_order(symbol:, side:, type:, size: nil, notional: nil, price: nil, client_order_id: nil)
-        post_signed("/spot/v2/submit_order", {
+        result = post_signed("/spot/v2/submit_order", {
           symbol: symbol, side: side, type: type,
           size: size, notional: notional, price: price,
           client_order_id: client_order_id
         })
+        return result if result.failure?
+        return Result::Failure.new("BitMart API error") unless result.data["code"] == 1000
+
+        order_id = result.data.dig("data", "order_id")
+        Result::Success.new({ order_id: order_id.to_s, raw: result.data })
       end
 
       def get_order(order_id:)
-        post_signed("/spot/v2/order_detail", { orderId: order_id })
+        result = post_signed("/spot/v2/order_detail", { orderId: order_id })
+        return result if result.failure?
+        return Result::Failure.new("BitMart API error") unless result.data["code"] == 1000
+
+        raw = result.data["data"]
+        return Result::Failure.new("Order not found") unless raw
+
+        Result::Success.new(normalize_order(order_id.to_s, raw))
       end
 
       def cancel_order(symbol:, order_id: nil, client_order_id: nil)
@@ -80,6 +111,51 @@ module Honeymaker
       end
 
       private
+
+      def normalize_order(order_id, raw)
+        order_type = parse_order_type(raw["type"])
+        side = raw["side"]&.downcase&.to_sym
+        status = parse_order_status(raw["status"])
+
+        amount = BigDecimal((raw["size"] || "0").to_s)
+        amount = nil if amount.zero?
+        quote_amount = raw["notional"] ? BigDecimal(raw["notional"].to_s) : nil
+        quote_amount = nil if quote_amount&.zero?
+
+        amount_exec = BigDecimal((raw["filled_size"] || "0").to_s)
+        quote_amount_exec = BigDecimal((raw["filled_notional"] || "0").to_s)
+        quote_amount_exec = nil if quote_amount_exec.negative?
+
+        price = BigDecimal((raw["price"] || "0").to_s)
+        if price.zero? && quote_amount_exec&.positive? && amount_exec.positive?
+          price = quote_amount_exec / amount_exec
+        end
+        price = nil if price.zero?
+
+        {
+          order_id: order_id, status: status, side: side, order_type: order_type,
+          price: price, amount: amount, quote_amount: quote_amount,
+          amount_exec: amount_exec, quote_amount_exec: quote_amount_exec, raw: raw
+        }
+      end
+
+      def parse_order_type(type)
+        case type
+        when "market" then :market
+        when "limit" then :limit
+        else :unknown
+        end
+      end
+
+      def parse_order_status(status)
+        case status
+        when "new", "partially_filled" then :open
+        when "filled" then :closed
+        when "canceled", "expired", "partially_canceled" then :cancelled
+        when "rejected", "failed" then :failed
+        else :unknown
+        end
+      end
 
       def validate_trading_credentials
         result = get_wallet
