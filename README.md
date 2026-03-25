@@ -8,7 +8,7 @@ Ruby clients for cryptocurrency exchange APIs. Originally extracted from [Deltab
 
 ## Supported Exchanges
 
-Binance, Binance US, Kraken, Coinbase, Bybit, KuCoin, Bitget, MEXC, Bitvavo, Gemini, Hyperliquid, BingX, Bitrue, BitMart.
+Binance, Binance US, Kraken, Kraken Futures, Coinbase, Bybit, KuCoin, Bitget, MEXC, Bitvavo, Gemini, Hyperliquid, BingX, Bitrue, BitMart.
 
 ## Installation
 
@@ -88,6 +88,50 @@ if result.success?
   order[:quote_amount_exec] # => BigDecimal — filled quote qty
   order[:raw]               # => Hash — full exchange response
 end
+```
+
+### Account History (Tax Reporting)
+
+History endpoints for margin, futures, staking/earn, and other tax-relevant events:
+
+```ruby
+# Margin
+client.margin_borrow_repay_history(type: "BORROW")   # Binance
+client.margin_interest_history                         # Binance, KuCoin, Bitget
+client.margin_force_liquidation                        # Binance
+
+# Futures
+client.futures_income_history(income_type: "REALIZED_PNL")  # Binance USDT-M
+client.coin_futures_income_history                          # Binance Coin-M
+client.futures_account_bills(product_type: "USDT-FUTURES")  # Bitget
+client.futures_income                                       # BingX
+
+# Staking / Earn
+client.simple_earn_flexible_rewards                    # Binance
+client.simple_earn_locked_subscriptions                # Binance
+client.earn_yield_history                              # Bybit
+client.staking_rewards                                 # Gemini
+client.staking_rewards_history                         # Binance US
+
+# Other
+client.universal_transfer_history(type: "MAIN_MARGIN") # Binance
+client.dust_log                                        # Binance
+client.asset_dividend                                  # Binance
+```
+
+Coverage varies by exchange. Kraken's `get_ledgers(type:)` covers margin, staking, and trades in a single endpoint. Coinbase's `list_transactions` covers 30+ event types.
+
+### Kraken Futures
+
+Kraken Futures uses separate API keys and a different auth scheme — it's a standalone client:
+
+```ruby
+client = Honeymaker.client("kraken_futures", api_key: "...", api_secret: "...")
+
+client.get_accounts                                  # wallet balances, margin, PnL
+client.get_fills                                     # trade fills
+client.get_open_positions                            # open positions
+client.historical_funding_rates(symbol: "PF_XBTUSD") # funding rate history
 ```
 
 ### Credential Validation
