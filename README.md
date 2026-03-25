@@ -18,22 +18,117 @@ gem "honeymaker"
 
 ## Usage
 
+### Market Data
+
 ```ruby
 require "honeymaker"
 
-# Get an exchange client
 exchange = Honeymaker.exchange("binance")
-
-# Fetch trading pair info (symbols, decimals, min/max amounts)
 result = exchange.get_tickers_info
 
 if result.success?
   result.data.each do |ticker|
     puts "#{ticker[:ticker]} — min: #{ticker[:minimum_quote_size]}, decimals: #{ticker[:base_decimals]}"
   end
-else
-  puts "Error: #{result.errors.join(', ')}"
 end
+```
+
+### Balances
+
+```ruby
+client = Honeymaker.client("binance", api_key: "...", api_secret: "...")
+result = client.get_balances
+
+if result.success?
+  result.data.each do |symbol, balance|
+    puts "#{symbol}: free=#{balance[:free]}, locked=#{balance[:locked]}"
+  end
+end
+# => { "BTC" => { free: BigDecimal("0.5"), locked: BigDecimal("0.1") }, ... }
+```
+
+Coinbase auto-resolves the default portfolio, or pass one explicitly:
+
+```ruby
+client.get_balances(portfolio_uuid: "...")
+```
+
+### Placing Orders
+
+Order placement returns a normalized `{ order_id:, raw: }` hash:
+
+```ruby
+client = Honeymaker.client("binance", api_key: "...", api_secret: "...")
+
+result = client.new_order(symbol: "BTCUSDT", side: "BUY", type: "MARKET", quote_order_qty: "100")
+if result.success?
+  puts result.data[:order_id]  # => "BTCUSDT-123456"
+  puts result.data[:raw]       # full exchange response
+end
+```
+
+Method names vary by exchange (`new_order`, `create_order`, `add_order`, `place_order`, `submit_order`) but the return format is the same.
+
+### Querying Orders
+
+Order queries return a normalized hash with unified status, amounts, and the raw response:
+
+```ruby
+result = client.query_order(symbol: "BTCUSDT", order_id: 123456)
+if result.success?
+  order = result.data
+  order[:order_id]          # => "BTCUSDT-123456"
+  order[:status]            # => :open, :closed, :cancelled, :failed, :unknown
+  order[:side]              # => :buy, :sell
+  order[:order_type]        # => :market, :limit
+  order[:price]             # => BigDecimal — avg fill price
+  order[:amount]            # => BigDecimal — requested base qty (nil if quote-denominated)
+  order[:quote_amount]      # => BigDecimal — requested quote qty (nil if base-denominated)
+  order[:amount_exec]       # => BigDecimal — filled base qty
+  order[:quote_amount_exec] # => BigDecimal — filled quote qty
+  order[:raw]               # => Hash — full exchange response
+end
+```
+
+### Credential Validation
+
+```ruby
+client = Honeymaker.client("binance", api_key: "...", api_secret: "...")
+result = client.validate(:trading)
+result.success? # => true if credentials have trading permissions
+```
+
+### Rate Limits
+
+Each exchange exposes rate limit metadata (milliseconds between requests):
+
+```ruby
+Honeymaker::Clients::Binance.rate_limits
+# => { default: 100, orders: 200 }
+
+Honeymaker::Clients::Kraken.rate_limits
+# => { default: 1000, orders: 1000 }
+```
+
+### Proxy Support
+
+```ruby
+client = Honeymaker.client("binance",
+  api_key: "...", api_secret: "...",
+  proxy: "http://proxy:8100"
+)
+```
+
+## Result Objects
+
+All methods return `Result::Success` or `Result::Failure`:
+
+```ruby
+result = client.get_balances
+result.success?  # true/false
+result.failure?  # true/false
+result.data      # response payload
+result.errors    # array of error messages (empty on success)
 ```
 
 ## License
