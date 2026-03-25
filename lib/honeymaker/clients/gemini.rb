@@ -80,6 +80,20 @@ module Honeymaker
         post_signed("/v1/withdraw/#{currency}", { address: address, amount: amount })
       end
 
+      # --- Staking ---
+
+      def staking_history
+        post_signed("/v1/staking/history")
+      end
+
+      def staking_rewards
+        post_signed("/v1/staking/rewards")
+      end
+
+      def staking_balances
+        post_signed("/v1/balances/staking")
+      end
+
       private
 
       def normalize_order(order_id, raw)

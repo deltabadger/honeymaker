@@ -96,6 +96,12 @@ module Honeymaker
         })
       end
 
+      # --- History ---
+
+      def get_transactions(limit: nil, start_time: nil, end_time: nil)
+        get_signed("/v2/transactions", { limit: limit, start: start_time, end: end_time })
+      end
+
       private
 
       def normalize_order(order_id, raw)

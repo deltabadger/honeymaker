@@ -82,6 +82,20 @@ module Honeymaker
         post_info(body)
       end
 
+      # --- Futures ---
+
+      def user_funding(user:, start_time:, end_time: nil)
+        body = { type: "userFunding", user: user, startTime: start_time }
+        body[:endTime] = end_time if end_time
+        post_info(body)
+      end
+
+      def user_non_funding_ledger_updates(user:, start_time:, end_time: nil)
+        body = { type: "userNonFundingLedgerUpdates", user: user, startTime: start_time }
+        body[:endTime] = end_time if end_time
+        post_info(body)
+      end
+
       private
 
       def parse_order_status(status)

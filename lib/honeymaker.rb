@@ -23,6 +23,7 @@ require_relative "honeymaker/clients/bingx"
 require_relative "honeymaker/clients/bitrue"
 require_relative "honeymaker/clients/bitmart"
 require_relative "honeymaker/clients/hyperliquid"
+require_relative "honeymaker/clients/kraken_futures"
 require_relative "honeymaker/exchanges/binance"
 require_relative "honeymaker/exchanges/binance_us"
 require_relative "honeymaker/exchanges/kraken"
@@ -72,7 +73,8 @@ module Honeymaker
     "bingx" => Clients::BingX,
     "bitrue" => Clients::Bitrue,
     "bitmart" => Clients::BitMart,
-    "hyperliquid" => Clients::Hyperliquid
+    "hyperliquid" => Clients::Hyperliquid,
+    "kraken_futures" => Clients::KrakenFutures
   }.freeze
 
   def self.exchange(name)

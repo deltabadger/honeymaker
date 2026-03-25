@@ -133,6 +133,16 @@ module Honeymaker
         post_private("/0/private/Withdraw", { nonce: nonce, asset: asset, key: key, amount: amount, address: address })
       end
 
+      # --- Earn ---
+
+      def get_earn_allocations(ascending: nil, converted_asset: nil, hide_zero_allocations: nil)
+        post_private("/0/private/Earn/Allocations", {
+          nonce: nonce, ascending: ascending,
+          converted_asset: converted_asset,
+          hide_zero_allocations: hide_zero_allocations
+        })
+      end
+
       private
 
       def normalize_order(order_id, raw)

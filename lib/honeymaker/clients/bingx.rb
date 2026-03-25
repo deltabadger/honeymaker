@@ -105,6 +105,26 @@ module Honeymaker
         })
       end
 
+      # --- Futures ---
+
+      def futures_income(symbol: nil, income_type: nil, start_time: nil, end_time: nil, limit: nil)
+        with_rescue do
+          params = {
+            symbol: symbol, incomeType: income_type,
+            startTime: start_time, endTime: end_time, limit: limit,
+            timestamp: timestamp_ms
+          }.compact
+          params[:signature] = hmac_sha256(@api_secret, Faraday::Utils.build_query(params))
+
+          response = futures_connection.get do |req|
+            req.url "/openApi/swap/v2/user/income"
+            req.headers = { "X-BX-APIKEY": @api_key }
+            req.params = params
+          end
+          response.body
+        end
+      end
+
       private
 
       def normalize_order(order_id, raw)
@@ -198,6 +218,10 @@ module Honeymaker
           end
           response.body
         end
+      end
+
+      def futures_connection
+        @futures_connection ||= build_client_connection("https://open-api.bingx.com", content_type_match: //)
       end
 
       def connection

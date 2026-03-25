@@ -110,6 +110,36 @@ module Honeymaker
         })
       end
 
+      # --- Margin ---
+
+      def margin_borrow_records(symbol: nil, borrow_id: nil, start_time: nil, end_time: nil, n: nil)
+        get_signed("/spot/v1/margin/isolated/borrow_record", {
+          symbol: symbol, borrow_id: borrow_id, start_time: start_time, end_time: end_time, N: n
+        })
+      end
+
+      def margin_repay_records(symbol: nil, repay_id: nil, currency: nil, start_time: nil, end_time: nil, n: nil)
+        get_signed("/spot/v1/margin/isolated/repay_record", {
+          symbol: symbol, repay_id: repay_id, currency: currency, start_time: start_time, end_time: end_time, N: n
+        })
+      end
+
+      # --- Futures ---
+
+      def futures_transaction_history(start_time: nil, end_time: nil, page_num: nil, page_size: nil, flow_type: nil)
+        get_signed("/contract/private/transaction-history", {
+          start_time: start_time, end_time: end_time,
+          page_num: page_num, page_size: page_size, flow_type: flow_type
+        })
+      end
+
+      def futures_trades(symbol:, start_time: nil, end_time: nil, page_num: nil, page_size: nil)
+        get_signed("/contract/private/trades", {
+          symbol: symbol, start_time: start_time, end_time: end_time,
+          page_num: page_num, page_size: page_size
+        })
+      end
+
       private
 
       def normalize_order(order_id, raw)

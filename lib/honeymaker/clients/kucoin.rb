@@ -128,6 +128,51 @@ module Honeymaker
         })
       end
 
+      # --- Margin ---
+
+      def margin_borrow_history(currency: nil, is_isolated: nil, symbol: nil, order_no: nil, start_time: nil, end_time: nil, current_page: nil, page_size: nil)
+        get_signed("/api/v3/margin/borrow", {
+          currency: currency, isIsolated: is_isolated, symbol: symbol, orderNo: order_no,
+          startTime: start_time, endTime: end_time, currentPage: current_page, pageSize: page_size
+        })
+      end
+
+      def margin_repay_history(currency: nil, is_isolated: nil, symbol: nil, order_no: nil, start_time: nil, end_time: nil, current_page: nil, page_size: nil)
+        get_signed("/api/v3/margin/repay", {
+          currency: currency, isIsolated: is_isolated, symbol: symbol, orderNo: order_no,
+          startTime: start_time, endTime: end_time, currentPage: current_page, pageSize: page_size
+        })
+      end
+
+      def margin_interest_history(currency: nil, is_isolated: nil, symbol: nil, start_time: nil, end_time: nil, current_page: nil, page_size: nil)
+        get_signed("/api/v3/margin/interest", {
+          currency: currency, isIsolated: is_isolated, symbol: symbol,
+          startTime: start_time, endTime: end_time, currentPage: current_page, pageSize: page_size
+        })
+      end
+
+      # --- Futures ---
+
+      def futures_funding_history(symbol:, start_at: nil, end_at: nil, reverse: nil, offset: nil, forward: nil, max_count: nil)
+        with_rescue do
+          params = {
+            symbol: symbol, startAt: start_at, endAt: end_at,
+            reverse: reverse, offset: offset, forward: forward, maxCount: max_count
+          }.compact
+          query_string = params.empty? ? "" : "?#{Faraday::Utils.build_query(params)}"
+          path = "/api/v1/funding-history"
+          ts = timestamp_ms.to_s
+          pre_sign = "#{ts}GET#{path}#{query_string}"
+
+          response = futures_connection.get do |req|
+            req.url path
+            req.headers = signed_headers(ts, pre_sign)
+            req.params = params
+          end
+          response.body
+        end
+      end
+
       private
 
       def normalize_order(order_id, raw)
@@ -251,6 +296,10 @@ module Honeymaker
           Accept: "application/json",
           "Content-Type": "application/json"
         }
+      end
+
+      def futures_connection
+        @futures_connection ||= build_client_connection("https://api-futures.kucoin.com")
       end
     end
   end

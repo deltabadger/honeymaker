@@ -130,6 +130,49 @@ module Honeymaker
         })
       end
 
+      # --- Margin ---
+
+      def borrow_history(currency: nil, start_time: nil, end_time: nil, limit: nil, cursor: nil)
+        get_authenticated("/v5/account/borrow-history", {
+          currency: currency, startTime: start_time, endTime: end_time, limit: limit, cursor: cursor
+        })
+      end
+
+      def spot_margin_repay_history(start_time: nil, end_time: nil, coin: nil, limit: nil, cursor: nil)
+        get_authenticated("/v5/spot-cross-margin-trade/repay-history", {
+          startTime: start_time, endTime: end_time, coin: coin, limit: limit, cursor: cursor
+        })
+      end
+
+      # --- Futures ---
+
+      def delivery_records(category:, symbol: nil, exp_date: nil, limit: nil, cursor: nil)
+        get_authenticated("/v5/asset/delivery-record", {
+          category: category, symbol: symbol, expDate: exp_date, limit: limit, cursor: cursor
+        })
+      end
+
+      def settlement_records(category:, symbol: nil, limit: nil, cursor: nil)
+        get_authenticated("/v5/asset/settlement-record", {
+          category: category, symbol: symbol, limit: limit, cursor: cursor
+        })
+      end
+
+      # --- Earn ---
+
+      def earn_order_records(order_id: nil, order_type: nil, start_time: nil, end_time: nil, limit: nil, cursor: nil)
+        get_authenticated("/v5/earn/order-records", {
+          orderId: order_id, orderType: order_type,
+          startTime: start_time, endTime: end_time, limit: limit, cursor: cursor
+        })
+      end
+
+      def earn_yield_history(product_id: nil, start_time: nil, end_time: nil, limit: nil, cursor: nil)
+        get_authenticated("/v5/earn/yield-history", {
+          productId: product_id, startTime: start_time, endTime: end_time, limit: limit, cursor: cursor
+        })
+      end
+
       private
 
       def normalize_order(order_id, raw)

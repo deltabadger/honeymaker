@@ -115,6 +115,19 @@ module Honeymaker
         })
       end
 
+      # --- Other ---
+
+      def dust_conversion_history(recv_window: 5000)
+        get_signed("/api/v3/capital/convert", { recvWindow: recv_window })
+      end
+
+      def universal_transfer_history(type:, start_time: nil, end_time: nil, page: nil, size: nil, recv_window: 5000)
+        get_signed("/api/v3/capital/transfer", {
+          type: type, startTime: start_time, endTime: end_time,
+          page: page, size: size, recvWindow: recv_window
+        })
+      end
+
       private
 
       def normalize_order(order_id, raw)

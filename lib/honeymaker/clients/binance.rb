@@ -382,7 +382,197 @@ module Honeymaker
         end
       end
 
+      # --- Margin ---
+
+      def margin_borrow_repay_history(type:, asset: nil, isolated_symbol: nil, start_time: nil, end_time: nil,
+                                      current: nil, size: nil, recv_window: 5000)
+        with_rescue do
+          response = connection.get do |req|
+            req.url "/sapi/v1/margin/borrow-repay"
+            req.headers = headers
+            req.params = {
+              type: type, asset: asset, isolatedSymbol: isolated_symbol,
+              startTime: start_time, endTime: end_time,
+              current: current, size: size,
+              recvWindow: recv_window, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
+      def margin_interest_history(asset: nil, isolated_symbol: nil, start_time: nil, end_time: nil,
+                                  current: nil, size: nil, archived: nil, recv_window: 5000)
+        with_rescue do
+          response = connection.get do |req|
+            req.url "/sapi/v1/margin/interestHistory"
+            req.headers = headers
+            req.params = {
+              asset: asset, isolatedSymbol: isolated_symbol,
+              startTime: start_time, endTime: end_time,
+              current: current, size: size, archived: archived,
+              recvWindow: recv_window, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
+      def margin_force_liquidation(start_time: nil, end_time: nil, isolated_symbol: nil,
+                                   current: nil, size: nil, recv_window: 5000)
+        with_rescue do
+          response = connection.get do |req|
+            req.url "/sapi/v1/margin/forceLiquidationRec"
+            req.headers = headers
+            req.params = {
+              startTime: start_time, endTime: end_time,
+              isolatedSymbol: isolated_symbol,
+              current: current, size: size,
+              recvWindow: recv_window, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
+      # --- Futures ---
+
+      def futures_income_history(symbol: nil, income_type: nil, start_time: nil, end_time: nil,
+                                 page: nil, limit: 1000, recv_window: 5000)
+        with_rescue do
+          response = usdt_futures_connection.get do |req|
+            req.url "/fapi/v1/income"
+            req.headers = headers
+            req.params = {
+              symbol: symbol, incomeType: income_type,
+              startTime: start_time, endTime: end_time,
+              page: page, limit: limit,
+              recvWindow: recv_window, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
+      def coin_futures_income_history(symbol: nil, income_type: nil, start_time: nil, end_time: nil,
+                                      page: nil, limit: 1000, recv_window: 5000)
+        with_rescue do
+          response = coin_futures_connection.get do |req|
+            req.url "/dapi/v1/income"
+            req.headers = headers
+            req.params = {
+              symbol: symbol, incomeType: income_type,
+              startTime: start_time, endTime: end_time,
+              page: page, limit: limit,
+              recvWindow: recv_window, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
+      # --- Simple Earn ---
+
+      def simple_earn_flexible_subscriptions(product_id: nil, purchase_id: nil, asset: nil,
+                                             start_time: nil, end_time: nil, current: nil, size: nil)
+        with_rescue do
+          response = connection.get do |req|
+            req.url "/sapi/v1/simple-earn/flexible/history/subscriptionRecord"
+            req.headers = headers
+            req.params = {
+              productId: product_id, purchaseId: purchase_id, asset: asset,
+              startTime: start_time, endTime: end_time,
+              current: current, size: size, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
+      def simple_earn_flexible_redemptions(product_id: nil, redeem_id: nil, asset: nil,
+                                           start_time: nil, end_time: nil, current: nil, size: nil)
+        with_rescue do
+          response = connection.get do |req|
+            req.url "/sapi/v1/simple-earn/flexible/history/redemptionRecord"
+            req.headers = headers
+            req.params = {
+              productId: product_id, redeemId: redeem_id, asset: asset,
+              startTime: start_time, endTime: end_time,
+              current: current, size: size, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
+      def simple_earn_locked_subscriptions(product_id: nil, purchase_id: nil, asset: nil,
+                                           start_time: nil, end_time: nil, current: nil, size: nil)
+        with_rescue do
+          response = connection.get do |req|
+            req.url "/sapi/v1/simple-earn/locked/history/subscriptionRecord"
+            req.headers = headers
+            req.params = {
+              productId: product_id, purchaseId: purchase_id, asset: asset,
+              startTime: start_time, endTime: end_time,
+              current: current, size: size, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
+      def simple_earn_locked_redemptions(product_id: nil, redeem_id: nil, asset: nil,
+                                         start_time: nil, end_time: nil, current: nil, size: nil)
+        with_rescue do
+          response = connection.get do |req|
+            req.url "/sapi/v1/simple-earn/locked/history/redemptionRecord"
+            req.headers = headers
+            req.params = {
+              productId: product_id, redeemId: redeem_id, asset: asset,
+              startTime: start_time, endTime: end_time,
+              current: current, size: size, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
+      # --- Transfers ---
+
+      def universal_transfer_history(type:, start_time: nil, end_time: nil, current: nil, size: nil, recv_window: 5000)
+        with_rescue do
+          response = connection.get do |req|
+            req.url "/sapi/v1/asset/transfer"
+            req.headers = headers
+            req.params = {
+              type: type, startTime: start_time, endTime: end_time,
+              current: current, size: size,
+              recvWindow: recv_window, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
       private
+
+      def usdt_futures_connection
+        @usdt_futures_connection ||= build_client_connection("https://fapi.binance.com")
+      end
+
+      def coin_futures_connection
+        @coin_futures_connection ||= build_client_connection("https://dapi.binance.com")
+      end
 
       def normalize_order(order_id, raw)
         order_type = parse_order_type(raw["type"])

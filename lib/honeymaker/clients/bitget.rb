@@ -114,6 +114,97 @@ module Honeymaker
         })
       end
 
+      # --- Margin (Cross) ---
+
+      def margin_crossed_borrow_history(loan_id: nil, coin: nil, start_time: nil, end_time: nil, limit: nil, id_less_than: nil)
+        get_signed("/api/v2/margin/crossed/borrow-history", {
+          loanId: loan_id, coin: coin,
+          startTime: start_time, endTime: end_time, limit: limit, idLessThan: id_less_than
+        })
+      end
+
+      def margin_crossed_repay_history(repay_id: nil, coin: nil, start_time: nil, end_time: nil, limit: nil, id_less_than: nil)
+        get_signed("/api/v2/margin/crossed/repay-history", {
+          repayId: repay_id, coin: coin,
+          startTime: start_time, endTime: end_time, limit: limit, idLessThan: id_less_than
+        })
+      end
+
+      def margin_crossed_interest_history(coin: nil, start_time: nil, end_time: nil, limit: nil, id_less_than: nil)
+        get_signed("/api/v2/margin/crossed/interest-history", {
+          coin: coin, startTime: start_time, endTime: end_time, limit: limit, idLessThan: id_less_than
+        })
+      end
+
+      def margin_crossed_liquidation_history(start_time: nil, end_time: nil, limit: nil, id_less_than: nil)
+        get_signed("/api/v2/margin/crossed/liquidation-history", {
+          startTime: start_time, endTime: end_time, limit: limit, idLessThan: id_less_than
+        })
+      end
+
+      # --- Margin (Isolated) ---
+
+      def margin_isolated_borrow_history(symbol: nil, loan_id: nil, coin: nil, start_time: nil, end_time: nil, limit: nil, id_less_than: nil)
+        get_signed("/api/v2/margin/isolated/borrow-history", {
+          symbol: symbol, loanId: loan_id, coin: coin,
+          startTime: start_time, endTime: end_time, limit: limit, idLessThan: id_less_than
+        })
+      end
+
+      def margin_isolated_repay_history(symbol: nil, repay_id: nil, coin: nil, start_time: nil, end_time: nil, limit: nil, id_less_than: nil)
+        get_signed("/api/v2/margin/isolated/repay-history", {
+          symbol: symbol, repayId: repay_id, coin: coin,
+          startTime: start_time, endTime: end_time, limit: limit, idLessThan: id_less_than
+        })
+      end
+
+      def margin_isolated_interest_history(symbol: nil, coin: nil, start_time: nil, end_time: nil, limit: nil, id_less_than: nil)
+        get_signed("/api/v2/margin/isolated/interest-history", {
+          symbol: symbol, coin: coin,
+          startTime: start_time, endTime: end_time, limit: limit, idLessThan: id_less_than
+        })
+      end
+
+      def margin_isolated_liquidation_history(symbol: nil, start_time: nil, end_time: nil, limit: nil, id_less_than: nil)
+        get_signed("/api/v2/margin/isolated/liquidation-history", {
+          symbol: symbol, startTime: start_time, endTime: end_time, limit: limit, idLessThan: id_less_than
+        })
+      end
+
+      # --- Futures ---
+
+      def futures_account_bills(product_type:, coin: nil, business: nil, start_time: nil, end_time: nil, limit: nil, id_less_than: nil)
+        get_signed("/api/v2/mix/account/bill", {
+          productType: product_type, coin: coin, business: business,
+          startTime: start_time, endTime: end_time, limit: limit, idLessThan: id_less_than
+        })
+      end
+
+      def futures_fills_history(product_type:, symbol: nil, order_id: nil, start_time: nil, end_time: nil, limit: nil, id_less_than: nil)
+        get_signed("/api/v2/mix/order/fills-history", {
+          productType: product_type, symbol: symbol, orderId: order_id,
+          startTime: start_time, endTime: end_time, limit: limit, idLessThan: id_less_than
+        })
+      end
+
+      # --- Earn ---
+
+      def earn_savings_assets(coin: nil, filter: nil)
+        get_signed("/api/v2/earn/savings/assets", { coin: coin, filter: filter })
+      end
+
+      def earn_savings_subscribe_result(coin: nil, start_time: nil, end_time: nil, limit: nil, id_less_than: nil)
+        get_signed("/api/v2/earn/savings/subscribe-result", {
+          coin: coin, startTime: start_time, endTime: end_time, limit: limit, idLessThan: id_less_than
+        })
+      end
+
+      def earn_savings_redeem_result(coin: nil, start_time: nil, end_time: nil, limit: nil, id_less_than: nil)
+        get_signed("/api/v2/earn/savings/redeem-result", {
+          coin: coin, startTime: start_time, endTime: end_time, limit: limit, idLessThan: id_less_than
+        })
+      end
+
       private
 
       def normalize_order(order_id, raw)

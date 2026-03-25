@@ -18,7 +18,7 @@ class HoneymakerClientRegistryTest < Minitest::Test
   end
 
   def test_all_clients_registered
-    assert_equal 14, Honeymaker::CLIENTS.size
+    assert_equal 15, Honeymaker::CLIENTS.size
   end
 
   def test_client_passes_credentials

@@ -84,7 +84,25 @@ module Honeymaker
         })
       end
 
+      # --- Futures ---
+
+      def futures_account(recv_window: 5000)
+        with_rescue do
+          response = futures_connection.get do |req|
+            req.url "/fapi/v1/account"
+            req.headers = auth_headers
+            req.params = { recvWindow: recv_window, timestamp: timestamp_ms }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
       private
+
+      def futures_connection
+        @futures_connection ||= build_client_connection("https://fapi.bitrue.com")
+      end
 
       def normalize_order(order_id, raw)
         order_type = parse_order_type(raw["type"])
