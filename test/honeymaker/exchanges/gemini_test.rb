@@ -37,6 +37,17 @@ class Honeymaker::Exchanges::GeminiTest < Minitest::Test
     assert ticker[:available]
   end
 
+  def test_get_bid_ask_parses_response
+    body = load_fixture("gemini_pubticker.json")
+    stub_connection(body)
+
+    result = @exchange.get_bid_ask("BTCUSD")
+
+    assert result.success?
+    assert_equal BigDecimal("67123.45"), result.data[:bid]
+    assert_equal BigDecimal("67125.67"), result.data[:ask]
+  end
+
   private
 
   def stub_connection(body)

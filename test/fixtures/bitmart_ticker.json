@@ -1,0 +1,12 @@
+{
+  "code": 1000,
+  "message": "OK",
+  "data": {
+    "symbol": "BTC_USDT",
+    "last": "67124.56",
+    "best_bid": "67123.45",
+    "best_ask": "67125.67",
+    "high_24h": "67500.00",
+    "low_24h": "66800.00"
+  }
+}

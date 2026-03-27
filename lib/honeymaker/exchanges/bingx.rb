@@ -31,6 +31,20 @@ module Honeymaker
         end
       end
 
+      def get_bid_ask(symbol)
+        with_rescue do
+          response = connection.get("/openApi/spot/v2/market/ticker") do |req|
+            req.params = { symbol: symbol }
+          end
+
+          data = response.body["data"].first
+          {
+            bid: BigDecimal(data["bestBidPrice"]),
+            ask: BigDecimal(data["bestAskPrice"])
+          }
+        end
+      end
+
       private
 
       def connection

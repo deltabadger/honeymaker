@@ -37,6 +37,17 @@ module Honeymaker
         end
       end
 
+      def get_bid_ask(symbol)
+        with_rescue do
+          response = connection.get("/api/v3/brokerage/market/products/#{symbol}")
+
+          {
+            bid: BigDecimal(response.body["bid"]),
+            ask: BigDecimal(response.body["ask"])
+          }
+        end
+      end
+
       private
 
       def connection

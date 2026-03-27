@@ -27,6 +27,20 @@ module Honeymaker
         end
       end
 
+      def get_bid_ask(symbol)
+        with_rescue do
+          response = connection.get("/api/v1/market/orderbook/level1") do |req|
+            req.params = { symbol: symbol }
+          end
+
+          data = response.body["data"]
+          {
+            bid: BigDecimal(data["bestBid"]),
+            ask: BigDecimal(data["bestAsk"])
+          }
+        end
+      end
+
       private
 
       def connection

@@ -27,6 +27,20 @@ module Honeymaker
         end
       end
 
+      def get_bid_ask(symbol)
+        with_rescue do
+          response = connection.get("/spot/quotation/v3/ticker") do |req|
+            req.params = { symbol: symbol }
+          end
+
+          data = response.body["data"]
+          {
+            bid: BigDecimal(data["best_bid"]),
+            ask: BigDecimal(data["best_ask"])
+          }
+        end
+      end
+
       private
 
       def connection

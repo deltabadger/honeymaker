@@ -1,0 +1,14 @@
+{
+  "code": "00000",
+  "msg": "success",
+  "data": [
+    {
+      "symbol": "BTCUSDT",
+      "bestBid": "67123.45",
+      "bestAsk": "67125.67",
+      "lastPr": "67124.56",
+      "high24h": "67500.00",
+      "low24h": "66800.00"
+    }
+  ]
+}

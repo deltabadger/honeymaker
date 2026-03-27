@@ -42,6 +42,17 @@ class Honeymaker::Exchanges::BitrueTest < Minitest::Test
     assert_equal 2, eth[:price_decimals]
   end
 
+  def test_get_bid_ask_parses_response
+    body = load_fixture("bitrue_book_ticker.json")
+    stub_connection(body)
+
+    result = @exchange.get_bid_ask("BTCUSDT")
+
+    assert result.success?
+    assert_equal BigDecimal("67123.45"), result.data[:bid]
+    assert_equal BigDecimal("67125.67"), result.data[:ask]
+  end
+
   private
 
   def stub_connection(body)

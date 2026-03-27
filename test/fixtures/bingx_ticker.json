@@ -1,0 +1,12 @@
+{
+  "code": 0,
+  "data": [
+    {
+      "symbol": "BTC-USDT",
+      "bestBidPrice": "67123.45",
+      "bestBidQty": "1.234567",
+      "bestAskPrice": "67125.67",
+      "bestAskQty": "0.987654"
+    }
+  ]
+}

@@ -60,6 +60,26 @@ class Honeymaker::Exchanges::KrakenTest < Minitest::Test
     assert_includes result.errors, "EGeneral:Internal error"
   end
 
+  def test_get_bid_ask_parses_response
+    body = load_fixture("kraken_ticker.json")
+    stub_request(body)
+
+    result = @exchange.get_bid_ask("XBTUSDT")
+
+    assert result.success?
+    assert_equal BigDecimal("67123.45"), result.data[:bid]
+    assert_equal BigDecimal("67125.67"), result.data[:ask]
+  end
+
+  def test_get_bid_ask_handles_api_error
+    body = { "error" => ["EGeneral:Internal error"], "result" => {} }
+    stub_request(body)
+
+    result = @exchange.get_bid_ask("XBTUSDT")
+
+    assert result.failure?
+  end
+
   private
 
   def stub_request(body)

@@ -29,6 +29,17 @@ class Honeymaker::Exchanges::BinanceUsTest < Minitest::Test
     assert_equal "BTC", ticker[:base]
   end
 
+  def test_get_bid_ask_parses_response
+    body = load_fixture("binance_book_ticker.json")
+    stub_connection(body)
+
+    result = @exchange.get_bid_ask("BTCUSDT")
+
+    assert result.success?
+    assert_equal BigDecimal("67123.45"), result.data[:bid]
+    assert_equal BigDecimal("67125.67"), result.data[:ask]
+  end
+
   private
 
   def stub_connection(body)

@@ -1,0 +1,19 @@
+{
+  "retCode": 0,
+  "retMsg": "OK",
+  "result": {
+    "category": "spot",
+    "list": [
+      {
+        "symbol": "BTCUSDT",
+        "bid1Price": "67123.45",
+        "bid1Size": "1.234567",
+        "ask1Price": "67125.67",
+        "ask1Size": "0.987654",
+        "lastPrice": "67124.56",
+        "highPrice24h": "67500.00",
+        "lowPrice24h": "66800.00"
+      }
+    ]
+  }
+}

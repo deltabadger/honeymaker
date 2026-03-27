@@ -41,6 +41,17 @@ class Honeymaker::Exchanges::BitMartTest < Minitest::Test
     refute eth[:available]
   end
 
+  def test_get_bid_ask_parses_response
+    body = load_fixture("bitmart_ticker.json")
+    stub_connection(body)
+
+    result = @exchange.get_bid_ask("BTC_USDT")
+
+    assert result.success?
+    assert_equal BigDecimal("67123.45"), result.data[:bid]
+    assert_equal BigDecimal("67125.67"), result.data[:ask]
+  end
+
   private
 
   def stub_connection(body)

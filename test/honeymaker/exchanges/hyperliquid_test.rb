@@ -41,6 +41,17 @@ class Honeymaker::Exchanges::HyperliquidTest < Minitest::Test
     assert_equal 1, result.data.size
   end
 
+  def test_get_bid_ask_parses_response
+    body = load_fixture("hyperliquid_all_mids.json")
+    stub_connection(body)
+
+    result = @exchange.get_bid_ask("BTC/USDC")
+
+    assert result.success?
+    assert_equal BigDecimal("67124.56"), result.data[:bid]
+    assert_equal BigDecimal("67124.56"), result.data[:ask]
+  end
+
   private
 
   def stub_connection(body)

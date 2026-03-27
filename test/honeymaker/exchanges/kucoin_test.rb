@@ -32,6 +32,17 @@ class Honeymaker::Exchanges::KucoinTest < Minitest::Test
     assert ticker[:available]
   end
 
+  def test_get_bid_ask_parses_response
+    body = load_fixture("kucoin_orderbook_level1.json")
+    stub_connection(body)
+
+    result = @exchange.get_bid_ask("BTC-USDT")
+
+    assert result.success?
+    assert_equal BigDecimal("67123.45"), result.data[:bid]
+    assert_equal BigDecimal("67125.67"), result.data[:ask]
+  end
+
   private
 
   def stub_connection(body)

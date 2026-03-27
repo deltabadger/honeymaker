@@ -58,6 +58,23 @@ module Honeymaker
         end
       end
 
+      def get_bid_ask(symbol)
+        with_rescue do
+          response = connection.get("/0/public/Ticker") do |req|
+            req.params = { pair: symbol }
+          end
+
+          error = response.body["error"]
+          raise StandardError, error.first if error.is_a?(Array) && error.any?
+
+          _key, data = response.body["result"].first
+          {
+            bid: BigDecimal(data["b"][0]),
+            ask: BigDecimal(data["a"][0])
+          }
+        end
+      end
+
       private
 
       def connection

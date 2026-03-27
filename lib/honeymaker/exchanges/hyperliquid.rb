@@ -37,6 +37,20 @@ module Honeymaker
         end
       end
 
+      def get_bid_ask(symbol)
+        with_rescue do
+          response = connection.post("/info") do |req|
+            req.body = { type: "allMids" }.to_json
+          end
+
+          price = BigDecimal(response.body[symbol])
+          {
+            bid: price,
+            ask: price
+          }
+        end
+      end
+
       private
 
       def connection

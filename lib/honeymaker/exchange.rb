@@ -14,6 +14,49 @@ module Honeymaker
       raise NotImplementedError, "#{self.class} must implement #get_tickers_info"
     end
 
+    def get_bid_ask(symbol)
+      raise NotImplementedError, "#{self.class} must implement #get_bid_ask"
+    end
+
+    def get_price(symbol)
+      result = get_bid_ask(symbol)
+      return result if result.failure?
+
+      Result::Success.new((result.data[:bid] + result.data[:ask]) / 2)
+    end
+
+    def tickers_info
+      if @tickers_info_cache && @tickers_info_expires_at && @tickers_info_expires_at > Time.now
+        return Result::Success.new(@tickers_info_cache)
+      end
+
+      result = get_tickers_info
+      if result.success?
+        @tickers_info_cache = result.data
+        @tickers_info_expires_at = Time.now + cache_ttl
+      end
+      result
+    end
+
+    def find_ticker(symbol)
+      result = tickers_info
+      return result if result.failure?
+
+      ticker = result.data.find { |t| t[:ticker] == symbol }
+      ticker ? Result::Success.new(ticker) : Result::Failure.new("Unknown symbol: #{symbol}")
+    end
+
+    def symbols
+      result = tickers_info
+      return result if result.failure?
+
+      Result::Success.new(result.data.map { |t| { base: t[:base], quote: t[:quote] } })
+    end
+
+    def cache_ttl
+      3600
+    end
+
     private
 
     def with_rescue
