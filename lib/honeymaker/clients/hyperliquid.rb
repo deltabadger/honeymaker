@@ -6,6 +6,10 @@ module Honeymaker
       URL = "https://api.hyperliquid.xyz"
       RATE_LIMITS = { default: 200, orders: 200 }.freeze
 
+      def initialize(api_key: nil, api_secret: nil, proxy: nil, logger: nil)
+        super
+      end
+
       def spot_meta
         post_info({ type: "spotMeta" })
       end
@@ -16,6 +20,23 @@ module Honeymaker
 
       def spot_clearinghouse_state(user:)
         post_info({ type: "spotClearinghouseState", user: user })
+      end
+
+      def all_mids
+        post_info({ type: "allMids" })
+      end
+
+      def spot_balances(user: nil)
+        user ||= @api_key
+        spot_clearinghouse_state(user: user)
+      end
+
+      def l2_book(coin:)
+        post_info({ type: "l2Book", coin: coin })
+      end
+
+      def candles_snapshot(coin:, interval:, start_time:, end_time:)
+        post_info({ type: "candleSnapshot", req: { coin: coin, interval: interval, startTime: start_time, endTime: end_time } })
       end
 
       def get_balances(user: nil)
@@ -82,6 +103,20 @@ module Honeymaker
         post_info(body)
       end
 
+      # --- Trading (requires hyperliquid gem) ---
+
+      def order(coin:, is_buy:, size:, limit_px:, order_type: { limit: { tif: "Gtc" } })
+        with_rescue do
+          exchange_client.order(coin: coin, is_buy: is_buy, size: size, limit_px: limit_px, order_type: order_type)
+        end
+      end
+
+      def cancel(coin:, oid:)
+        with_rescue do
+          exchange_client.cancel(coin: coin, oid: oid)
+        end
+      end
+
       # --- Futures ---
 
       def user_funding(user:, start_time:, end_time: nil)
@@ -116,6 +151,17 @@ module Honeymaker
 
       def validate_read_credentials
         validate_trading_credentials
+      end
+
+      def exchange_client
+        raise Error, "Trading requires api_secret (agent key)" unless @api_secret && !@api_secret.empty?
+        @exchange ||= begin
+          require "hyperliquid"
+          sdk = ::Hyperliquid.new(private_key: @api_secret)
+          sdk.exchange
+        rescue LoadError
+          raise Error, "Add 'hyperliquid' to your Gemfile to use Hyperliquid trading"
+        end
       end
 
       def post_info(body)

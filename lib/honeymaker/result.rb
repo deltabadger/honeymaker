@@ -17,6 +17,18 @@ module Honeymaker
       !success?
     end
 
+    def or(other)
+      return data if success?
+
+      other
+    end
+
+    def ==(other)
+      return false unless other.is_a?(Result)
+
+      data == other.data && errors == other.errors
+    end
+
     class Success < Result
       def initialize(data = nil)
         @data = data

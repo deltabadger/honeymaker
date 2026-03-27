@@ -17,6 +17,10 @@ module Honeymaker
         get_public("/spot/v1/symbols/details")
       end
 
+      def get_currencies
+        get_public("/account/v1/currencies")
+      end
+
       def get_ticker(symbol: nil)
         get_public("/spot/quotation/v3/ticker", { symbol: symbol })
       end
@@ -100,6 +104,10 @@ module Honeymaker
         get_signed("/account/v1/deposit-withdraw/detail", {
           currency: currency, N: n, type: "withdraw", operation_type: "withdraw", status: status
         })
+      end
+
+      def get_withdraw_addresses
+        get_signed("/account/v1/withdraw/address/list")
       end
 
       def withdraw(currency:, amount:, address:, address_memo: nil, destination: nil)

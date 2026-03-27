@@ -22,6 +22,14 @@ module Honeymaker
         get_public("/v2/candles/#{symbol}/#{time_frame}")
       end
 
+      def get_price_feed
+        get_public("/v1/pricefeed")
+      end
+
+      def get_approved_addresses(network:)
+        post_signed("/v1/approvedAddresses/account/#{network}")
+      end
+
       def get_raw_balances
         post_signed("/v1/balances")
       end

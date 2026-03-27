@@ -82,6 +82,10 @@ module Honeymaker
         delete_signed("/api/v1/orders/#{order_id}")
       end
 
+      def get_orderbook(symbol:, limit: 20)
+        get_public("/api/v1/market/orderbook/level2_#{limit}", { symbol: symbol })
+      end
+
       def get_currencies
         get_public("/api/v3/currencies")
       end

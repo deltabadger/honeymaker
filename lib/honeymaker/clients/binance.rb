@@ -168,6 +168,32 @@ module Honeymaker
         end
       end
 
+      def test_new_order(symbol:, side:, type:, time_in_force: nil, quantity: nil, quote_order_qty: nil,
+                        price: nil, new_client_order_id: nil, strategy_id: nil, strategy_type: nil,
+                        stop_price: nil, trailing_delta: nil, iceberg_qty: nil, new_order_resp_type: nil,
+                        self_trade_prevention_mode: nil, recv_window: 5000, compute_commission_rates: false)
+        with_rescue do
+          response = connection.post do |req|
+            req.url "/api/v3/order/test"
+            req.headers = headers
+            req.params = {
+              symbol: symbol, side: side, type: type,
+              timeInForce: time_in_force, quantity: quantity,
+              quoteOrderQty: quote_order_qty, price: price,
+              newClientOrderId: new_client_order_id,
+              strategyId: strategy_id, strategyType: strategy_type,
+              stopPrice: stop_price, trailingDelta: trailing_delta,
+              icebergQty: iceberg_qty, newOrderRespType: new_order_resp_type,
+              selfTradePreventionMode: self_trade_prevention_mode,
+              computeCommissionRates: compute_commission_rates,
+              recvWindow: recv_window, timestamp: timestamp_ms
+            }.compact
+            req.params[:signature] = sign_params(req.params)
+          end
+          response.body
+        end
+      end
+
       def cancel_order(symbol:, order_id: nil, orig_client_order_id: nil, new_client_order_id: nil,
                        cancel_restrictions: nil, recv_window: 5000)
         with_rescue do

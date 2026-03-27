@@ -77,6 +77,10 @@ module Honeymaker
         })
       end
 
+      def get_all_coins_info
+        get_signed("/openApi/wallets/v1/capital/config/getall")
+      end
+
       def get_trade_fills(symbol: nil, order_id: nil, start_time: nil, end_time: nil, from_id: nil, limit: nil)
         get_signed("/openApi/spot/v1/trade/fills", {
           symbol: symbol, orderId: order_id,
