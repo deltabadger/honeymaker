@@ -138,7 +138,9 @@ module Honeymaker
             }.compact
             req.params[:signature] = sign_params(req.params)
           end
-          response.body
+          response.body.map do |raw|
+            normalize_order("#{symbol}-#{raw['orderId']}", raw)
+          end
         end
       end
 
