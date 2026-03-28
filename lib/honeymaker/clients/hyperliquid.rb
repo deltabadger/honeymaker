@@ -103,17 +103,17 @@ module Honeymaker
         post_info(body)
       end
 
-      # --- Trading (requires hyperliquid gem) ---
+      # --- Trading (requires hyperliquid-rb gem) ---
 
       def order(coin:, is_buy:, size:, limit_px:, order_type: { limit: { tif: "Gtc" } })
         with_rescue do
-          exchange_client.order(coin: coin, is_buy: is_buy, size: size, limit_px: limit_px, order_type: order_type)
+          exchange_client.order(coin, is_buy: is_buy, sz: size, limit_px: limit_px, order_type: order_type)
         end
       end
 
       def cancel(coin:, oid:)
         with_rescue do
-          exchange_client.cancel(coin: coin, oid: oid)
+          exchange_client.cancel(coin, oid)
         end
       end
 
@@ -157,10 +157,9 @@ module Honeymaker
         raise Error, "Trading requires api_secret (agent key)" unless @api_secret && !@api_secret.empty?
         @exchange ||= begin
           require "hyperliquid"
-          sdk = ::Hyperliquid.new(private_key: @api_secret)
-          sdk.exchange
+          ::Hyperliquid::Exchange.new(private_key: @api_secret)
         rescue LoadError
-          raise Error, "Add 'hyperliquid' to your Gemfile to use Hyperliquid trading"
+          raise Error, "Add 'hyperliquid-rb' to your Gemfile to use Hyperliquid trading"
         end
       end
 
