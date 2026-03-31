@@ -67,7 +67,7 @@ module Honeymaker
         return Result::Failure.new("Bitget API error") unless result.data["code"] == "00000"
 
         order_id = result.data.dig("data", "orderId")
-        Result::Success.new({ order_id: order_id, raw: result.data })
+        Result::Success.new({ order_id: "#{symbol}-#{order_id}", raw: result.data })
       end
 
       def get_order(order_id: nil, client_oid: nil)

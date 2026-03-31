@@ -39,14 +39,14 @@ class Honeymaker::Clients::BitgetTest < Minitest::Test
     stub_connection(:post, { "code" => "00000", "data" => { "orderId" => "123" } })
     result = @client.place_order(symbol: "BTCUSDT", side: "buy", order_type: "market", size: "0.001")
     assert result.success?
-    assert_equal "123", result.data[:order_id]
+    assert_equal "BTCUSDT-123", result.data[:order_id]
   end
 
   def test_place_order_with_quote_size
     stub_connection(:post, { "code" => "00000", "data" => { "orderId" => "456" } })
     result = @client.place_order(symbol: "BTCUSDT", side: "buy", order_type: "market", quote_size: "100")
     assert result.success?
-    assert_equal "456", result.data[:order_id]
+    assert_equal "BTCUSDT-456", result.data[:order_id]
   end
 
   def test_get_order
