@@ -95,6 +95,22 @@ module Honeymaker
         })
       end
 
+      def deposit_history(coin: nil, status: nil, start_time: nil, end_time: nil, offset: nil, limit: 1000, recv_window: 5000)
+        get_signed("/api/v1/capital/deposit/hisrec", {
+          coin: coin, status: status,
+          startTime: start_time, endTime: end_time,
+          offset: offset, limit: limit, recvWindow: recv_window
+        })
+      end
+
+      def withdraw_history(coin: nil, status: nil, start_time: nil, end_time: nil, offset: nil, limit: 1000, recv_window: 5000)
+        get_signed("/api/v1/capital/withdraw/history", {
+          coin: coin, status: status,
+          startTime: start_time, endTime: end_time,
+          offset: offset, limit: limit, recvWindow: recv_window
+        })
+      end
+
       # --- Futures ---
 
       def futures_account(recv_window: 5000)
