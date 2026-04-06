@@ -33,14 +33,13 @@ task :bump_version do
   bump_version(@bump_segment || :patch)
 end
 
-task :release_preflight do
+task release_preflight: :bump_version do
   sh "bundle install"
   Rake::Task[:test].invoke
   sh 'git add -A && git diff --cached --quiet || git commit -m "$(ruby -e "require_relative \'lib/honeymaker/version\'; puts Honeymaker::VERSION")"'
 end
 
 Rake::Task[:build].enhance([:release_preflight])
-Rake::Task[:release].enhance([:bump_version])
 
 namespace :release do
   task :minor do
