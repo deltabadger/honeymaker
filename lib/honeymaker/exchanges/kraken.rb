@@ -9,6 +9,13 @@ module Honeymaker
         "COPM" # has the same external_id (ecomi) as OMI
       ].freeze
 
+      ERROR_PATTERNS = [
+        {
+          code: :regional_restriction,
+          pattern: /\AEAccount:Invalid permissions:(?<asset>\S+) trading restricted for (?<country>\w+)\.?\z/
+        }
+      ].freeze
+
       REAL_COSTMIN = {
         "AUD" => 10,
         "CAD" => 5,

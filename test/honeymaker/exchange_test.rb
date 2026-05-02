@@ -125,4 +125,14 @@ class Honeymaker::ExchangeTest < Minitest::Test
     exchange = Honeymaker::Exchange.new
     assert_equal 3600, exchange.cache_ttl
   end
+
+  def test_classify_error_returns_nil_when_no_patterns
+    exchange = Honeymaker::Exchange.new
+    assert_nil exchange.classify_error("anything")
+  end
+
+  def test_classify_error_returns_nil_for_nil_message
+    exchange = Honeymaker::Exchange.new
+    assert_nil exchange.classify_error(nil)
+  end
 end

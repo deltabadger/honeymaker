@@ -80,6 +80,19 @@ class Honeymaker::Exchanges::KrakenTest < Minitest::Test
     assert result.failure?
   end
 
+  def test_classify_error_regional_restriction
+    result = @exchange.classify_error("EAccount:Invalid permissions:XAUT trading restricted for DK.")
+    assert_equal({ code: :regional_restriction, asset: "XAUT", country: "DK" }, result)
+  end
+
+  def test_classify_error_returns_nil_for_unknown_message
+    assert_nil @exchange.classify_error("EGeneral:Internal error")
+  end
+
+  def test_classify_error_returns_nil_for_nil_message
+    assert_nil @exchange.classify_error(nil)
+  end
+
   private
 
   def stub_request(body)

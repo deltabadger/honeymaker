@@ -10,6 +10,18 @@ module Honeymaker
       }
     }.freeze
 
+    ERROR_PATTERNS = [].freeze
+
+    def classify_error(message)
+      return nil if message.nil?
+
+      self.class::ERROR_PATTERNS.each do |entry|
+        next unless (match = entry[:pattern].match(message))
+        return { code: entry[:code], **match.named_captures.transform_keys(&:to_sym) }
+      end
+      nil
+    end
+
     def get_tickers_info
       raise NotImplementedError, "#{self.class} must implement #get_tickers_info"
     end
