@@ -26,6 +26,19 @@ class Honeymaker::Exchanges::BinanceTest < Minitest::Test
     assert_equal 8, ticker[:quote_decimals]
     assert_equal 2, ticker[:price_decimals]
     assert ticker[:available]
+    assert ticker[:trading_enabled]
+  end
+
+  def test_get_tickers_info_marks_non_trading_pairs_disabled
+    body = load_fixture("binance_exchange_info.json")
+    body["symbols"].first["status"] = "BREAK"
+    stub_connection(body)
+
+    result = @exchange.get_tickers_info
+
+    ticker = result.data.first
+    assert ticker[:available]        # still listed
+    refute ticker[:trading_enabled]  # but not trading
   end
 
   def test_get_tickers_info_handles_api_error

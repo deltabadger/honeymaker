@@ -28,6 +28,7 @@ class Honeymaker::Exchanges::HyperliquidTest < Minitest::Test
     assert_equal 2, ticker[:quote_decimals]
     assert_equal 5, ticker[:price_decimals]
     assert ticker[:available]
+    assert ticker[:trading_enabled] # no native status -> always true
   end
 
   def test_skips_pairs_with_missing_tokens

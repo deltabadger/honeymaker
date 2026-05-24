@@ -29,6 +29,29 @@ class Honeymaker::Exchanges::CoinbaseTest < Minitest::Test
     assert_equal 2, ticker[:quote_decimals]
     assert_equal 2, ticker[:price_decimals]
     assert ticker[:available]
+    assert ticker[:trading_enabled] # no disabled signal -> defaults to true
+  end
+
+  def test_get_tickers_info_disables_when_trading_disabled
+    body = load_fixture("coinbase_products.json")
+    body["products"].first["trading_disabled"] = true
+    stub_connection(body)
+
+    result = @exchange.get_tickers_info
+
+    ticker = result.data.first
+    assert ticker[:available]        # still listed
+    refute ticker[:trading_enabled]  # but not trading
+  end
+
+  def test_get_tickers_info_disables_when_status_not_online
+    body = load_fixture("coinbase_products.json")
+    body["products"].first["status"] = "delisted"
+    stub_connection(body)
+
+    result = @exchange.get_tickers_info
+
+    refute result.data.first[:trading_enabled]
   end
 
   def test_filters_blacklisted_assets

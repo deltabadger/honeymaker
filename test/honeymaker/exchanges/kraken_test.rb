@@ -26,6 +26,38 @@ class Honeymaker::Exchanges::KrakenTest < Minitest::Test
     assert_equal 5, ticker[:quote_decimals]
     assert_equal 1, ticker[:price_decimals]
     assert ticker[:available]
+    assert ticker[:trading_enabled] # fixture has no status -> defaults to true
+  end
+
+  def test_get_tickers_info_disables_non_online_status
+    body = load_fixture("kraken_asset_pairs.json")
+    body["result"]["XBTUSDT"]["status"] = "cancel_only"
+    stub_request(body)
+
+    result = @exchange.get_tickers_info
+
+    ticker = result.data.first
+    assert ticker[:available]        # still listed
+    refute ticker[:trading_enabled]  # but not trading
+  end
+
+  def test_get_tickers_info_enables_online_status
+    body = load_fixture("kraken_asset_pairs.json")
+    body["result"]["XBTUSDT"]["status"] = "online"
+    stub_request(body)
+
+    result = @exchange.get_tickers_info
+
+    assert result.data.first[:trading_enabled]
+  end
+
+  def test_get_tickers_info_defaults_trading_enabled_when_status_absent
+    body = load_fixture("kraken_asset_pairs.json") # no status key
+    stub_request(body)
+
+    result = @exchange.get_tickers_info
+
+    assert result.data.first[:trading_enabled]
   end
 
   def test_get_tickers_info_skips_pairs_without_wsname
