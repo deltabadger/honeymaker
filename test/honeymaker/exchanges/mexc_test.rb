@@ -29,16 +29,18 @@ class Honeymaker::Exchanges::MexcTest < Minitest::Test
     assert_equal 8, ticker[:quote_decimals]
     assert_equal 2, ticker[:price_decimals]
     assert ticker[:available]
+    assert ticker[:trading_enabled]
   end
 
-  def test_halted_symbol_not_available
+  def test_halted_symbol_listed_but_not_trading_enabled
     body = load_fixture("mexc_exchange_info.json")
     stub_connection(body)
 
     result = @exchange.get_tickers_info
 
     halted = result.data.find { |t| t[:ticker] == "ETHUSDT" }
-    refute halted[:available]
+    assert halted[:available]        # still listed
+    refute halted[:trading_enabled]  # but not trading
   end
 
   def test_falls_back_to_precision_fields_when_no_filters

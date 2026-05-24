@@ -21,7 +21,8 @@ module Honeymaker
               base_decimals: product["quantityPrecision"].to_i,
               quote_decimals: product["quotePrecision"].to_i,
               price_decimals: product["pricePrecision"].to_i,
-              available: product["status"] == "online"
+              available: true,
+              trading_enabled: product["status"] == "online"
             }
           end
         end

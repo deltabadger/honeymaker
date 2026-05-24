@@ -24,7 +24,8 @@ module Honeymaker
               base_decimals: product["pricePrecision"] || 8,
               quote_decimals: product["pricePrecision"] || 8,
               price_decimals: product["pricePrecision"] || 8,
-              available: product["status"] == "trading"
+              available: true,
+              trading_enabled: product["status"] == "trading"
             }
           end
         end

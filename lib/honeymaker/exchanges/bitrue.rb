@@ -23,7 +23,8 @@ module Honeymaker
               base_decimals: f[:lot_size] ? Utils.decimals(f[:lot_size]["stepSize"]) : product["baseAssetPrecision"],
               quote_decimals: product["quotePrecision"],
               price_decimals: f[:price] ? Utils.decimals(f[:price]["tickSize"]) : product["quotePrecision"],
-              available: product["status"] == "TRADING"
+              available: true,
+              trading_enabled: product["status"] == "TRADING"
             }
           end
         end

@@ -59,7 +59,8 @@ module Honeymaker
               base_decimals: info["lot_decimals"],
               quote_decimals: info["cost_decimals"],
               price_decimals: info["pair_decimals"],
-              available: true
+              available: true,
+              trading_enabled: info.key?("status") ? info["status"] == "online" : true
             }
           end
         end

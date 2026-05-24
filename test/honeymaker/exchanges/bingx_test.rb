@@ -30,6 +30,7 @@ class Honeymaker::Exchanges::BingXTest < Minitest::Test
     assert_equal 2, ticker[:quote_decimals]
     assert_equal 2, ticker[:price_decimals]
     assert ticker[:available]
+    assert ticker[:trading_enabled]
   end
 
   def test_skips_symbols_without_dash

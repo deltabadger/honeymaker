@@ -27,6 +27,8 @@ class Honeymaker::Exchanges::BinanceUsTest < Minitest::Test
     ticker = result.data.first
     assert_equal "BTCUSDT", ticker[:ticker]
     assert_equal "BTC", ticker[:base]
+    assert ticker[:available]
+    assert ticker[:trading_enabled]
   end
 
   def test_get_bid_ask_parses_response

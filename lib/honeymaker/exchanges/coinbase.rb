@@ -31,7 +31,8 @@ module Honeymaker
               base_decimals: Utils.decimals(product["base_increment"]),
               quote_decimals: Utils.decimals(product["quote_increment"]),
               price_decimals: Utils.decimals(product["price_increment"]),
-              available: true
+              available: true,
+              trading_enabled: trading_enabled?(product)
             }
           end
         end
@@ -49,6 +50,15 @@ module Honeymaker
       end
 
       private
+
+      # Coinbase only signals problems explicitly: a `trading_disabled` flag or a non-"online"
+      # `status`. Absent either signal, treat the pair as enabled.
+      def trading_enabled?(product)
+        return false if product["trading_disabled"] == true
+        return false if product.key?("status") && product["status"] != "online"
+
+        true
+      end
 
       def connection
         @connection ||= build_connection(BASE_URL)

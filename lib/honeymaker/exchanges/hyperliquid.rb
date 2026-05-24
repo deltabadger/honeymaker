@@ -31,7 +31,8 @@ module Honeymaker
               base_decimals: base_token["szDecimals"] || 0,
               quote_decimals: 2,
               price_decimals: 5,
-              available: true
+              available: true,
+              trading_enabled: true
             }
           end
         end

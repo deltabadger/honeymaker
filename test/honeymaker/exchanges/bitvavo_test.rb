@@ -29,16 +29,18 @@ class Honeymaker::Exchanges::BitvavoTest < Minitest::Test
     assert_equal 5, ticker[:quote_decimals]
     assert_equal 5, ticker[:price_decimals]
     assert ticker[:available]
+    assert ticker[:trading_enabled]
   end
 
-  def test_halted_market_not_available
+  def test_halted_market_listed_but_not_trading_enabled
     body = load_fixture("bitvavo_markets.json")
     stub_connection(body)
 
     result = @exchange.get_tickers_info
 
     eth = result.data.find { |t| t[:ticker] == "ETH-EUR" }
-    refute eth[:available]
+    assert eth[:available]          # still listed
+    refute eth[:trading_enabled]    # but not trading
   end
 
   def test_get_bid_ask_parses_response

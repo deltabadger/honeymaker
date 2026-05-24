@@ -27,7 +27,8 @@ module Honeymaker
               base_decimals: Utils.decimals(tick_size),
               quote_decimals: Utils.decimals(quote_increment),
               price_decimals: Utils.decimals(quote_increment),
-              available: detail["status"] == "open"
+              available: true,
+              trading_enabled: detail["status"] == "open"
             }
           end
         end

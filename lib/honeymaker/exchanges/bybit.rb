@@ -26,7 +26,8 @@ module Honeymaker
               base_decimals: Utils.decimals(lot_size_filter["basePrecision"]),
               quote_decimals: Utils.decimals(lot_size_filter["quotePrecision"]),
               price_decimals: Utils.decimals(price_filter["tickSize"]),
-              available: product["status"] == "Trading"
+              available: true,
+              trading_enabled: product["status"] == "Trading"
             }
           end
         end

@@ -29,16 +29,18 @@ class Honeymaker::Exchanges::BitMartTest < Minitest::Test
     assert_equal 2, ticker[:quote_decimals]
     assert_equal 2, ticker[:price_decimals]
     assert ticker[:available]
+    assert ticker[:trading_enabled]
   end
 
-  def test_pre_trade_not_available
+  def test_pre_trade_listed_but_not_trading_enabled
     body = load_fixture("bitmart_symbols.json")
     stub_connection(body)
 
     result = @exchange.get_tickers_info
 
     eth = result.data.find { |t| t[:ticker] == "ETH_USDT" }
-    refute eth[:available]
+    assert eth[:available]          # still listed
+    refute eth[:trading_enabled]    # but not trading
   end
 
   def test_get_bid_ask_parses_response

@@ -29,6 +29,7 @@ class Honeymaker::Exchanges::BitrueTest < Minitest::Test
     assert_equal 2, ticker[:quote_decimals]
     assert_equal 2, ticker[:price_decimals]
     assert ticker[:available]
+    assert ticker[:trading_enabled]
   end
 
   def test_falls_back_to_precision_fields_when_no_filters

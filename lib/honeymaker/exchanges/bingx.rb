@@ -25,7 +25,8 @@ module Honeymaker
               base_decimals: Utils.decimals(product["stepSize"]),
               quote_decimals: Utils.decimals(product["tickSize"]),
               price_decimals: Utils.decimals(product["tickSize"]),
-              available: product["status"].to_i == 1
+              available: true,
+              trading_enabled: product["status"].to_i == 1
             }
           end
         end

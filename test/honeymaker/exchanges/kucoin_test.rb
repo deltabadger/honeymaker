@@ -30,6 +30,7 @@ class Honeymaker::Exchanges::KucoinTest < Minitest::Test
     assert_equal 6, ticker[:quote_decimals]
     assert_equal 1, ticker[:price_decimals]
     assert ticker[:available]
+    assert ticker[:trading_enabled]
   end
 
   def test_get_bid_ask_parses_response
