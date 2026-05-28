@@ -4,6 +4,7 @@ require "test_helper"
 
 class Honeymaker::Clients::KrakenTest < Minitest::Test
   def setup
+    Honeymaker::Clients::Kraken.reset_nonce_state! if Honeymaker::Clients::Kraken.respond_to?(:reset_nonce_state!)
     @client = Honeymaker::Clients::Kraken.new(
       api_key: "test_key",
       api_secret: Base64.strict_encode64("test_secret_key_1234567890123456")
@@ -74,7 +75,64 @@ class Honeymaker::Clients::KrakenTest < Minitest::Test
     refute headers.key?(:"API-Key")
   end
 
+  def test_reset_nonce_state_is_available_for_test_isolation
+    assert_respond_to Honeymaker::Clients::Kraken, :reset_nonce_state!
+  end
+
+  def test_nonce_is_strictly_increasing_in_a_tight_loop
+    nonces = Array.new(10_000) { @client.send(:nonce) }
+
+    assert_strictly_increasing nonces
+  end
+
+  def test_nonce_is_strictly_increasing_when_clock_is_frozen
+    frozen_time = Time.utc(2026, 1, 1, 12, 0, 0)
+    Time.stubs(:now).returns(frozen_time)
+
+    nonces = Array.new(3) { @client.send(:nonce) }
+
+    assert_strictly_increasing nonces
+  end
+
+  def test_nonce_is_strictly_increasing_across_clients_with_the_same_api_key
+    frozen_time = Time.utc(2026, 1, 1, 12, 0, 0)
+    Time.stubs(:now).returns(frozen_time)
+    other_client = Honeymaker::Clients::Kraken.new(
+      api_key: "test_key",
+      api_secret: Base64.strict_encode64("test_secret_key_1234567890123456")
+    )
+
+    nonces = [
+      @client.send(:nonce),
+      other_client.send(:nonce),
+      @client.send(:nonce),
+      other_client.send(:nonce)
+    ]
+
+    assert_strictly_increasing nonces
+  end
+
+  def test_nonce_sequences_are_independent_for_different_api_keys
+    frozen_time = Time.utc(2026, 1, 1, 12, 0, 0)
+    Time.stubs(:now).returns(frozen_time)
+    first_key_client = Honeymaker::Clients::Kraken.new(api_key: "first_key", api_secret: @client.api_secret)
+    second_key_client = Honeymaker::Clients::Kraken.new(api_key: "second_key", api_secret: @client.api_secret)
+
+    first_key_first_nonce = first_key_client.send(:nonce)
+    first_key_second_nonce = first_key_client.send(:nonce)
+    second_key_first_nonce = second_key_client.send(:nonce)
+
+    assert_operator first_key_second_nonce, :>, first_key_first_nonce
+    assert_equal first_key_first_nonce, second_key_first_nonce
+  end
+
   private
+
+  def assert_strictly_increasing(values)
+    values.each_cons(2) do |previous, current|
+      assert_operator current, :>, previous
+    end
+  end
 
   def stub_connection(method, body)
     response = stub(body: body)

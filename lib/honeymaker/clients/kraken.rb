@@ -237,8 +237,25 @@ module Honeymaker
         end
       end
 
+      # Kraken rejects any request whose nonce is <= the last nonce it saw for the
+      # same API key. We protect against in-process collisions (microsecond bursts,
+      # backward clock corrections) by tracking the last issued nonce per API key
+      # under a mutex. Cross-process reuse of the same API key (other workers,
+      # other containers, other tools) is not protected here — affected users
+      # should increase the Nonce Window on their Kraken API key.
+      @@nonce_mutex = Mutex.new
+      @@last_nonces = {}
+
+      def self.reset_nonce_state!
+        @@nonce_mutex.synchronize { @@last_nonces.clear }
+      end
+
       def nonce
-        (Time.now.utc.to_f * 1_000_000).to_i
+        key = @api_key ? Digest::SHA256.hexdigest(@api_key) : :__no_api_key__
+        @@nonce_mutex.synchronize do
+          candidate = (Time.now.utc.to_f * 1_000_000).to_i
+          @@last_nonces[key] = [candidate, (@@last_nonces[key] || 0) + 1].max
+        end
       end
 
       def private_headers(path, body)
