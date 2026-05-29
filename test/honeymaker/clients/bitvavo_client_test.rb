@@ -47,6 +47,36 @@ class Honeymaker::Clients::BitvavoTest < Minitest::Test
     assert result.success?
   end
 
+  # Bitvavo requires a mandatory integer operatorId on every order create/cancel
+  # (errorCode 203). These tests yield the real Faraday request block so we assert
+  # what the client actually sends, not just the stubbed response.
+
+  def test_place_order_sends_default_operator_id
+    req = capture_request(:post, { "orderId" => "123" })
+    @client.place_order(market: "BTC-EUR", side: "buy", order_type: "market", amount_quote: "100")
+    assert_equal @client.class::DEFAULT_OPERATOR_ID, req.body[:operatorId]
+    assert_kind_of Integer, req.body[:operatorId]
+  end
+
+  def test_place_order_operator_id_override
+    req = capture_request(:post, { "orderId" => "123" })
+    @client.place_order(market: "BTC-EUR", side: "buy", order_type: "market", amount_quote: "100", operator_id: 42)
+    assert_equal 42, req.body[:operatorId]
+  end
+
+  def test_cancel_order_sends_default_operator_id
+    req = capture_request(:delete, { "orderId" => "123" })
+    @client.cancel_order(market: "BTC-EUR", order_id: "123")
+    assert_equal @client.class::DEFAULT_OPERATOR_ID, req.params[:operatorId]
+    assert_kind_of Integer, req.params[:operatorId]
+  end
+
+  def test_cancel_order_operator_id_override
+    req = capture_request(:delete, { "orderId" => "123" })
+    @client.cancel_order(market: "BTC-EUR", order_id: "123", operator_id: 42)
+    assert_equal 42, req.params[:operatorId]
+  end
+
   def test_withdraw
     stub_connection(:post, { "success" => true })
     result = @client.withdraw(symbol: "BTC", amount: "0.1", address: "addr")
@@ -101,5 +131,26 @@ class Honeymaker::Clients::BitvavoTest < Minitest::Test
     connection = stub
     connection.stubs(method).returns(response)
     @client.instance_variable_set(:@connection, connection)
+  end
+
+  # Records what the client sets on the Faraday request. Unlike stub_connection,
+  # this yields the request block (connection.post { |req| ... }) so the real
+  # body/params-building code in post_signed/delete_signed actually executes.
+  class RequestRecorder
+    attr_accessor :headers, :body, :params
+    attr_reader :requested_url
+
+    def url(path)
+      @requested_url = path
+    end
+  end
+
+  def capture_request(method, body)
+    response = stub(body: body)
+    recorder = RequestRecorder.new
+    connection = stub
+    connection.stubs(method).yields(recorder).returns(response)
+    @client.instance_variable_set(:@connection, connection)
+    recorder
   end
 end

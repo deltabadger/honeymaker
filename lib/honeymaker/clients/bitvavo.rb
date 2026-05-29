@@ -7,6 +7,11 @@ module Honeymaker
       ACCESS_WINDOW = "10000"
       RATE_LIMITS = { default: 100, orders: 100 }.freeze
 
+      # Bitvavo requires a mandatory operatorId on every order create/cancel
+      # (errorCode 203). It's a positive int64 the caller sets themselves to
+      # attribute an order to a trader/bot for audit; the value is cosmetic.
+      DEFAULT_OPERATOR_ID = 1
+
       def get_assets
         get_public("/v2/assets")
       end
@@ -51,11 +56,12 @@ module Honeymaker
       end
 
       def place_order(market:, side:, order_type:, amount: nil, amount_quote: nil, price: nil,
-                      time_in_force: nil, client_order_id: nil)
+                      time_in_force: nil, client_order_id: nil, operator_id: nil)
         result = post_signed("/v2/order", {
           market: market, side: side, orderType: order_type,
           amount: amount, amountQuote: amount_quote, price: price,
-          timeInForce: time_in_force, clientOrderId: client_order_id
+          timeInForce: time_in_force, clientOrderId: client_order_id,
+          operatorId: operator_id || DEFAULT_OPERATOR_ID
         })
         return result if result.failure?
 
@@ -71,8 +77,10 @@ module Honeymaker
         Result::Success.new(normalize_order("#{raw['market']}-#{raw['orderId']}", raw))
       end
 
-      def cancel_order(market:, order_id:)
-        delete_signed("/v2/order", { market: market, orderId: order_id })
+      def cancel_order(market:, order_id:, operator_id: nil)
+        delete_signed("/v2/order", {
+          market: market, orderId: order_id, operatorId: operator_id || DEFAULT_OPERATOR_ID
+        })
       end
 
       def get_trades(market:, limit: nil, start_time: nil, end_time: nil, trade_id_from: nil, trade_id_to: nil)
