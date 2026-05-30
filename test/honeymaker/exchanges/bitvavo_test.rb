@@ -25,9 +25,9 @@ class Honeymaker::Exchanges::BitvavoTest < Minitest::Test
     assert_equal "0.00001", ticker[:minimum_base_size]
     assert_equal "5", ticker[:minimum_quote_size]
     assert_nil ticker[:maximum_base_size]
-    assert_equal 5, ticker[:base_decimals]
-    assert_equal 5, ticker[:quote_decimals]
-    assert_equal 5, ticker[:price_decimals]
+    assert_equal 8, ticker[:base_decimals]
+    assert_equal 2, ticker[:quote_decimals]
+    assert_equal 0, ticker[:price_decimals] # tickSize "1.00" -> whole-number prices
     assert ticker[:available]
     assert ticker[:trading_enabled]
   end

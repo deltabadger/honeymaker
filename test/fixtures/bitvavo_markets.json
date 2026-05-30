@@ -2,15 +2,29 @@
   {
     "market": "BTC-EUR",
     "status": "trading",
+    "base": "BTC",
+    "quote": "EUR",
     "minOrderInBaseAsset": "0.00001",
     "minOrderInQuoteAsset": "5",
-    "pricePrecision": 5
+    "maxOrderInBaseAsset": "1000",
+    "maxOrderInQuoteAsset": "1000000",
+    "pricePrecision": null,
+    "tickSize": "1.00",
+    "quantityDecimals": 8,
+    "notionalDecimals": 2,
+    "orderTypes": ["market", "limit"]
   },
   {
     "market": "ETH-EUR",
     "status": "halted",
-    "minOrderInBaseAsset": "0.001",
+    "base": "ETH",
+    "quote": "EUR",
+    "minOrderInBaseAsset": "0.0001",
     "minOrderInQuoteAsset": "5",
-    "pricePrecision": 4
+    "pricePrecision": null,
+    "tickSize": "0.01",
+    "quantityDecimals": 6,
+    "notionalDecimals": 2,
+    "orderTypes": ["market", "limit"]
   }
 ]
