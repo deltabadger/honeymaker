@@ -117,8 +117,22 @@ class Honeymaker::Exchanges::KrakenTest < Minitest::Test
     assert_equal({ code: :regional_restriction, asset: "XAUT", country: "DK" }, result)
   end
 
+  def test_classify_error_invalid_nonce
+    assert_equal({ code: :transient_nonce }, @exchange.classify_error("EAPI:Invalid nonce"))
+  end
+
+  def test_classify_error_internal_error_is_transient_unavailable
+    assert_equal({ code: :transient_unavailable }, @exchange.classify_error("EGeneral:Internal error"))
+  end
+
+  def test_classify_error_service_codes_are_transient_unavailable
+    assert_equal({ code: :transient_unavailable }, @exchange.classify_error("EService:Unavailable"))
+    assert_equal({ code: :transient_unavailable }, @exchange.classify_error("EService:Busy"))
+    assert_equal({ code: :transient_unavailable }, @exchange.classify_error("EService:Deadline elapsed"))
+  end
+
   def test_classify_error_returns_nil_for_unknown_message
-    assert_nil @exchange.classify_error("EGeneral:Internal error")
+    assert_nil @exchange.classify_error("EOrder:Unknown order")
   end
 
   def test_classify_error_returns_nil_for_nil_message

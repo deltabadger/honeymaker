@@ -9,10 +9,21 @@ module Honeymaker
         "COPM" # has the same external_id (ecomi) as OMI
       ].freeze
 
+      # Patterns are unanchored (except regional_restriction) because the consumer may
+      # pass a sentence-joined error string. transient_nonce is matched first as it is
+      # the more specific/actionable case.
       ERROR_PATTERNS = [
         {
           code: :regional_restriction,
           pattern: /\AEAccount:Invalid permissions:(?<asset>\S+) trading restricted for (?<country>\w+)\.?\z/
+        },
+        {
+          code: :transient_nonce,
+          pattern: /EAPI:Invalid nonce/
+        },
+        {
+          code: :transient_unavailable,
+          pattern: /EGeneral:Internal error|EService:(?:Unavailable|Busy|Deadline elapsed)/
         }
       ].freeze
 
