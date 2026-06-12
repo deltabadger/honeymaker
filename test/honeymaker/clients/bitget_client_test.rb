@@ -51,7 +51,7 @@ class Honeymaker::Clients::BitgetTest < Minitest::Test
 
   def test_get_order
     stub_connection(:get, { "code" => "00000", "data" => [{
-      "orderId" => "123", "orderType" => "market", "side" => "buy", "status" => "full_fill",
+      "orderId" => "123", "orderType" => "market", "side" => "buy", "status" => "filled",
       "priceAvg" => "50000", "size" => "0.001", "baseVolume" => "0.001", "quoteVolume" => "50"
     }] })
     result = @client.get_order(order_id: "123")

@@ -238,8 +238,8 @@ module Honeymaker
       def parse_order_status(status)
         case status
         when "init", "new" then :unknown
-        when "partial_fill", "live" then :open
-        when "full_fill" then :closed
+        when "partially_filled", "live" then :open
+        when "filled" then :closed
         when "cancelled" then :cancelled
         else :unknown
         end
