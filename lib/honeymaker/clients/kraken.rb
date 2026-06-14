@@ -121,6 +121,47 @@ module Honeymaker
         })
       end
 
+      # Reconcile orders that QueryOrders has already dropped (Kraken removes terminal
+      # orders within hours) against TradesHistory, which is authoritative for executions
+      # and effectively unbounded in retention. Returns ONLY orders that actually executed,
+      # keyed by ordertxid, each as a per-order executed aggregate. Orders with no trades
+      # (never filled / truly gone) are simply absent from the result.
+      #
+      # `start` should be a unix timestamp bounding the lookback (e.g. the order's creation
+      # time) so we don't page the user's entire trade history.
+      def closed_orders_from_trades(order_ids:, start: nil, max_pages: 20)
+        wanted = Array(order_ids)
+        return Result::Success.new({}) if wanted.empty?
+
+        by_order = Hash.new { |h, k| h[k] = [] }
+        offset = 0
+        pages = 0
+        loop do
+          result = get_trades_history(start: start, ofs: offset)
+          return result if result.failure?
+
+          errors = result.data["error"]
+          return Result::Failure.new(*errors) if errors.is_a?(Array) && errors.any?
+
+          trades = result.data.dig("result", "trades") || {}
+          break if trades.empty?
+
+          trades.each_value do |t|
+            otxid = t["ordertxid"]
+            by_order[otxid] << t if wanted.include?(otxid)
+          end
+
+          # Do NOT early-exit when each id has been *seen* — a partial fill can have trades on
+          # later pages. Page the whole [start, now] window (bounded by `start` + max_pages).
+          pages += 1
+          offset += trades.size
+          count = result.data.dig("result", "count").to_i
+          break if offset >= count || pages >= max_pages
+        end
+
+        Result::Success.new(by_order.transform_values { |trades| aggregate_trades(trades) })
+      end
+
       def get_withdraw_addresses(asset: nil, method: nil)
         post_private("/0/private/WithdrawAddresses", { nonce: nonce, asset: asset, method: method })
       end
@@ -144,6 +185,29 @@ module Honeymaker
       end
 
       private
+
+      def aggregate_trades(trades)
+        first = trades.first
+        vol  = trades.sum { |t| BigDecimal(t["vol"].to_s) }
+        cost = trades.sum { |t| BigDecimal(t["cost"].to_s) }
+        fee  = trades.sum { |t| BigDecimal(t["fee"].to_s) }
+        {
+          order_id: first["ordertxid"],
+          status: :closed,                       # only executed orders reach here
+          side: first["type"]&.to_sym,           # buy / sell
+          order_type: parse_order_type(first["ordertype"]),
+          price: vol.zero? ? nil : cost / vol,   # VWAP across (partial) fills
+          amount: nil,                           # original order size unknown from trades
+          quote_amount: nil,
+          amount_exec: vol,
+          quote_amount_exec: cost,
+          fee: fee,
+          pair: first["pair"],
+          trade_count: trades.size,
+          last_trade_at: trades.map { |t| t["time"].to_f }.max,
+          raw: { "trades" => trades }
+        }
+      end
 
       def normalize_order(order_id, raw)
         descr = raw["descr"] || {}

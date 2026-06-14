@@ -126,6 +126,53 @@ class Honeymaker::Clients::KrakenTest < Minitest::Test
     assert_equal first_key_first_nonce, second_key_first_nonce
   end
 
+  def test_closed_orders_from_trades_aggregates_partial_fills
+    page = { "error" => [], "result" => { "count" => 2, "trades" => {
+      "TID-1" => { "ordertxid" => "OABC", "pair" => "XXBTZUSD", "type" => "buy",
+                   "ordertype" => "limit", "price" => "60000.0", "cost" => "6.0",
+                   "vol" => "0.0001", "fee" => "0.01", "time" => 1_700_000_000.0 },
+      "TID-2" => { "ordertxid" => "OABC", "pair" => "XXBTZUSD", "type" => "buy",
+                   "ordertype" => "limit", "price" => "61000.0", "cost" => "4.0",
+                   "vol" => "0.00006557", "fee" => "0.006", "time" => 1_700_000_100.0 } } } }
+    stub_connection(:post, page)
+    result = @client.closed_orders_from_trades(order_ids: ["OABC"], start: 1_699_999_000)
+    assert result.success?
+    agg = result.data["OABC"]
+    assert_equal :closed, agg[:status]
+    assert_equal :buy, agg[:side]
+    assert_equal :limit, agg[:order_type]
+    assert_equal BigDecimal("10.0"), agg[:quote_amount_exec]          # 6 + 4
+    assert_equal BigDecimal("0.00016557"), agg[:amount_exec]          # summed vol
+    assert_equal BigDecimal("0.016"), agg[:fee]                       # 0.01 + 0.006
+    assert_equal BigDecimal("10.0") / BigDecimal("0.00016557"), agg[:price] # VWAP = cost/vol
+    assert_equal "XXBTZUSD", agg[:pair]
+  end
+
+  def test_closed_orders_from_trades_ignores_unrelated_orders
+    stub_connection(:post, { "error" => [], "result" => { "count" => 1, "trades" => {
+      "TID-9" => { "ordertxid" => "OOTHER", "pair" => "XXBTZUSD", "type" => "buy",
+                   "ordertype" => "limit", "price" => "1", "cost" => "1", "vol" => "1",
+                   "fee" => "0", "time" => 1_700_000_000.0 } } } })
+    result = @client.closed_orders_from_trades(order_ids: ["OABC"], start: 1)
+    assert result.success?
+    assert_empty result.data
+  end
+
+  def test_closed_orders_from_trades_aggregates_partial_fills_across_pages
+    page1 = Honeymaker::Result::Success.new({ "error" => [], "result" => { "count" => 2, "trades" => {
+      "TID-1" => { "ordertxid" => "OABC", "pair" => "XXBTZUSD", "type" => "buy", "ordertype" => "limit",
+                   "price" => "60000.0", "cost" => "6.0", "vol" => "0.0001", "fee" => "0.01", "time" => 1.0 } } } })
+    page2 = Honeymaker::Result::Success.new({ "error" => [], "result" => { "count" => 2, "trades" => {
+      "TID-2" => { "ordertxid" => "OABC", "pair" => "XXBTZUSD", "type" => "buy", "ordertype" => "limit",
+                   "price" => "61000.0", "cost" => "4.0", "vol" => "0.00006557", "fee" => "0.006", "time" => 2.0 } } } })
+    @client.stubs(:get_trades_history).returns(page1, page2)  # Mocha returns successive values per call
+    result = @client.closed_orders_from_trades(order_ids: ["OABC"], start: 1, max_pages: 5)
+    assert result.success?
+    agg = result.data["OABC"]
+    assert_equal BigDecimal("10.0"), agg[:quote_amount_exec]        # 6 + 4 across both pages
+    assert_equal BigDecimal("0.00016557"), agg[:amount_exec]
+  end
+
   private
 
   def assert_strictly_increasing(values)
