@@ -57,31 +57,55 @@ module Honeymaker
         Result::Success.new(balances)
       end
 
+      # Hyperliquid's orderStatus body is NESTED:
+      #   { "status" => "order"|"unknownOid",
+      #     "order"  => { "order" => { coin, side, limitPx, sz(remaining), origSz, oid, timestamp, ... },
+      #                   "status" => <real order status>, "statusTimestamp" => ... } }
+      # The real status/sizes live under order["order"]/order["status"] — NOT the top level — and the
+      # body carries NO fills. So the ordered amount is origSz, executed is origSz - remaining sz, and the
+      # exact cost comes from a bounded userFillsByTime (only fetched when something actually executed,
+      # since userFillsByTime is API weight 20 vs orderStatus's weight 2).
       def order_status(user:, oid:)
         result = post_info({ type: "orderStatus", user: user, oid: oid })
         return result if result.failure?
 
         raw = result.data
-        order = raw["order"] || {}
-        fills = raw["fills"] || []
-        status_str = raw["status"]
+        # A distinct not-found signal — aged-out orders are normal; the caller recovers fills / abandons.
+        return Result::Failure.new("unknownOid", data: { not_found: true }) if raw["status"] == "unknownOid"
+
+        wrapper = raw["order"] || {}
+        order = wrapper["order"] || {}
+        status_str = wrapper["status"]
 
         coin = order["coin"]
         side = order["side"] == "B" ? :buy : :sell
         limit_price = BigDecimal((order["limitPx"] || "0").to_s)
-        ordered_size = BigDecimal((order["sz"] || "0").to_s)
+        ordered_size = BigDecimal((order["origSz"] || "0").to_s)
+        remaining_size = BigDecimal((order["sz"] || "0").to_s)
+        amount_exec = [ordered_size - remaining_size, BigDecimal("0")].max
 
-        amount_exec = fills.sum { |f| BigDecimal(f["sz"].to_s) }
-        quote_amount_exec = fills.sum { |f| BigDecimal(f["px"].to_s) * BigDecimal(f["sz"].to_s) }
-        avg_price = amount_exec.positive? ? (quote_amount_exec / amount_exec) : limit_price
-        avg_price = nil if avg_price.zero?
+        quote_amount_exec = BigDecimal("0")
+        price = limit_price
+        if amount_exec.positive?
+          fills_result = order["timestamp"] ? user_fills_by_time(user: user, start_time: order["timestamp"]) : nil
+          # A FAILED exact-cost lookup (timeout / rate-limit) is PROPAGATED so the consumer's typed-error
+          # retry runs — never record an executed order with an estimated cost just because userFills
+          # blipped (that would silently corrupt accounting and skip the retry).
+          return fills_result if fills_result&.failure?
 
-        status = parse_order_status(status_str)
+          matched = Array(fills_result&.data).select { |f| f["oid"].to_s == oid.to_s }
+          matched_quote = matched.sum(BigDecimal("0")) { |f| BigDecimal(f["px"].to_s) * BigDecimal(f["sz"].to_s) }
+          # userFills SUCCEEDED but has no matching fill (aged out of the window) → estimate from the
+          # limit price so a filled order never reports quote_amount_exec 0. Only on success, never failure.
+          quote_amount_exec = matched_quote.positive? ? matched_quote : (limit_price * amount_exec)
+          price = quote_amount_exec / amount_exec
+        end
+        price = nil if price.nil? || price.zero?
 
         Result::Success.new({
-          order_id: "#{coin}-#{oid}",
-          status: status, side: side, order_type: :limit,
-          price: avg_price, amount: ordered_size, quote_amount: nil,
+          order_id: "#{coin}-#{oid}", coin: coin,
+          status: parse_order_status(status_str), side: side, order_type: :limit,
+          price: price, amount: ordered_size, quote_amount: nil,
           amount_exec: amount_exec, quote_amount_exec: quote_amount_exec, raw: raw
         })
       end
@@ -133,13 +157,21 @@ module Honeymaker
 
       private
 
+      # Suffix-aware so the whole Hyperliquid cancel family (marginCanceled, scheduledCancel,
+      # reduceOnlyCanceled, siblingFilledCanceled, …) maps correctly. A triggered order has fired
+      # and become a live resting order → :open. An unmapped status is logged, never swallowed.
       def parse_order_status(status)
         case status
-        when "open", "marginCanceled" then :open
         when "filled" then :closed
-        when "canceled", "triggered", "rejected" then :cancelled
-        when "unknownOid" then :unknown
-        else :unknown
+        when "open", "triggered" then :open
+        else
+          str = status.to_s
+          if str.match?(/cancel/i) || str.match?(/reject/i)
+            :cancelled
+          else
+            @logger&.warn("[honeymaker] Unmapped Hyperliquid order status: #{status.inspect}")
+            :unknown
+          end
         end
       end
 
