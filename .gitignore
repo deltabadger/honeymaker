@@ -7,3 +7,6 @@
 /spec/reports/
 /tmp/
 *.gem
+
+# Internal planning docs — MUST NOT be committed to this public repo.
+/docs/
