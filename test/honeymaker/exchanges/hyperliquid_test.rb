@@ -22,8 +22,8 @@ class Honeymaker::Exchanges::HyperliquidTest < Minitest::Test
     assert_equal "PURR/USDC", ticker[:ticker]
     assert_equal "PURR", ticker[:base]
     assert_equal "USDC", ticker[:quote]
-    assert_nil ticker[:minimum_base_size]
-    assert_nil ticker[:minimum_quote_size]
+    assert_nil ticker[:minimum_base_size] # no per-token base floor in spotMeta
+    assert_equal 10, ticker[:minimum_quote_size] # Hyperliquid's hard 10-USDC spot order floor
     assert_equal 2, ticker[:base_decimals]
     assert_equal 2, ticker[:quote_decimals]
     assert_equal 5, ticker[:price_decimals]
