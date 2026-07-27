@@ -18,7 +18,7 @@ class HoneymakerClientRegistryTest < Minitest::Test
   end
 
   def test_all_clients_registered
-    assert_equal 15, Honeymaker::CLIENTS.size
+    assert_equal 14, Honeymaker::CLIENTS.size
   end
 
   def test_client_passes_credentials
@@ -35,10 +35,5 @@ class HoneymakerClientRegistryTest < Minitest::Test
   def test_kucoin_accepts_passphrase
     client = Honeymaker.client("kucoin", api_key: "k", api_secret: "s", passphrase: "p")
     assert_equal "p", client.passphrase
-  end
-
-  def test_bitmart_accepts_memo
-    client = Honeymaker.client("bitmart", api_key: "k", api_secret: "s", memo: "m")
-    assert_equal "m", client.memo
   end
 end

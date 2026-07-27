@@ -22,6 +22,6 @@ class HoneymakerTest < Minitest::Test
   end
 
   def test_all_exchanges_registered
-    assert_equal 14, Honeymaker::EXCHANGES.size
+    assert_equal 13, Honeymaker::EXCHANGES.size
   end
 end

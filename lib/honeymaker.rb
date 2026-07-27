@@ -21,7 +21,6 @@ require_relative "honeymaker/clients/bitvavo"
 require_relative "honeymaker/clients/gemini"
 require_relative "honeymaker/clients/bingx"
 require_relative "honeymaker/clients/bitrue"
-require_relative "honeymaker/clients/bitmart"
 require_relative "honeymaker/clients/hyperliquid"
 require_relative "honeymaker/clients/kraken_futures"
 require_relative "honeymaker/exchanges/binance"
@@ -37,7 +36,6 @@ require_relative "honeymaker/exchanges/kucoin"
 require_relative "honeymaker/exchanges/hyperliquid"
 require_relative "honeymaker/exchanges/bingx"
 require_relative "honeymaker/exchanges/bitrue"
-require_relative "honeymaker/exchanges/bitmart"
 
 module Honeymaker
   class Error < StandardError; end
@@ -55,8 +53,7 @@ module Honeymaker
     "kucoin" => Exchanges::Kucoin,
     "hyperliquid" => Exchanges::Hyperliquid,
     "bingx" => Exchanges::BingX,
-    "bitrue" => Exchanges::Bitrue,
-    "bitmart" => Exchanges::BitMart
+    "bitrue" => Exchanges::Bitrue
   }.freeze
 
   CLIENTS = {
@@ -72,7 +69,6 @@ module Honeymaker
     "gemini" => Clients::Gemini,
     "bingx" => Clients::BingX,
     "bitrue" => Clients::Bitrue,
-    "bitmart" => Clients::BitMart,
     "hyperliquid" => Clients::Hyperliquid,
     "kraken_futures" => Clients::KrakenFutures
   }.freeze

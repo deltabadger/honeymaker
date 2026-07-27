@@ -8,7 +8,7 @@ Ruby clients for cryptocurrency exchange APIs used by [Deltabadger](https://gith
 
 ## Supported Exchanges
 
-Binance, Binance US, Kraken, Kraken Futures, Coinbase, Bybit, KuCoin, Bitget, MEXC, Bitvavo, Gemini, Hyperliquid, BingX, Bitrue, BitMart.
+Binance, Binance US, Kraken, Kraken Futures, Coinbase, Bybit, KuCoin, Bitget, MEXC, Bitvavo, Gemini, Hyperliquid, BingX, Bitrue.
 
 ## Installation
 

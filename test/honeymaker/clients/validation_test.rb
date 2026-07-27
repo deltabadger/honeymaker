@@ -148,21 +148,6 @@ class ValidationTest < Minitest::Test
     assert result.success?
   end
 
-  # BitMart
-  def test_bitmart_validate_trading_success
-    client = Honeymaker::Clients::BitMart.new(api_key: "k", api_secret: "s", memo: "m")
-    stub_connection(client, :get, { "code" => 1000, "data" => {} })
-    result = client.validate(:trading)
-    assert result.success?
-  end
-
-  def test_bitmart_validate_trading_failure
-    client = Honeymaker::Clients::BitMart.new(api_key: "k", api_secret: "s", memo: "m")
-    stub_connection(client, :get, { "code" => 30004, "message" => "Unauthorized" })
-    result = client.validate(:trading)
-    assert result.failure?
-  end
-
   # Hyperliquid
   def test_hyperliquid_validate_trading_success
     client = Honeymaker::Clients::Hyperliquid.new(api_key: "0xabc", api_secret: "s")
