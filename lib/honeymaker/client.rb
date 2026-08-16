@@ -70,8 +70,19 @@ module Honeymaker
       status = e.respond_to?(:response_status) ? e.response_status : nil
       Result::Failure.new(error_message, data: { status: status })
     rescue StandardError => e
+      # NOT an exchange error — a bug here, in a vendor gem, or in the caller, and it arrives in the
+      # same Result::Failure as a genuine venue rejection. Callers classify that text to decide "out
+      # of funds" / "bad key" / "safe to retry", so an unlabelled TypeError gets attributed to the
+      # exchange: a hyperliquid-rb signing crash sat in production order history for three months
+      # reading exactly like a venue rejection. Name the class so the true source is unmistakable,
+      # and flag it so a caller can refuse to classify it as the venue's at all.
+      #
+      # The class is a PREFIX, not a replacement: the network failures that also land here
+      # (Net::ReadTimeout, execution expired, connection refused) are matched by substring for
+      # transient retry, and those matches must keep working.
       msg = e.message
-      Result::Failure.new((msg && !msg.empty?) ? msg : "Unknown error")
+      labelled = (msg && !msg.empty?) ? "#{e.class}: #{msg}" : e.class.to_s
+      Result::Failure.new(labelled, data: { client_error: true })
     end
 
     # A business error the exchange returned inside an HTTP-200 envelope (KuCoin's non-"200000"

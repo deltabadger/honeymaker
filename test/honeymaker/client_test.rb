@@ -41,7 +41,44 @@ class Honeymaker::ClientTest < Minitest::Test
     client = Honeymaker::Client.new
     result = client.send(:with_rescue) { raise StandardError, "boom" }
     assert result.failure?
-    assert_equal ["boom"], result.errors
+    assert_equal ["StandardError: boom"], result.errors
+  end
+
+  # A bug in this gem, in a vendor gem, or in the caller is NOT an exchange error, but it lands in
+  # the same Result::Failure. Callers classify failure text to decide "out of funds" / "bad key" /
+  # "retry me", so an unlabelled TypeError reads as something the venue said and gets filed and
+  # reported as one. Naming the class makes the true source unmistakable, and the flag lets a
+  # caller refuse to classify it at all.
+  def test_with_rescue_names_the_exception_class_for_non_api_errors
+    client = Honeymaker::Client.new
+    result = client.send(:with_rescue) { raise TypeError, "String can't be coerced into Float" }
+    assert result.failure?
+    assert_equal ["TypeError: String can't be coerced into Float"], result.errors
+    assert result.data[:client_error], "a local exception must be flagged, not passed off as the venue's"
+  end
+
+  def test_with_rescue_labels_an_empty_message_with_its_class
+    client = Honeymaker::Client.new
+    result = client.send(:with_rescue) { raise NoMethodError, "" }
+    assert result.failure?
+    assert_equal ["NoMethodError"], result.errors
+  end
+
+  # Network failures reach callers through this branch too, and the transient-retry matchers key
+  # off substrings of them. Prefixing must not break that.
+  def test_with_rescue_keeps_network_substrings_matchable
+    client = Honeymaker::Client.new
+    result = client.send(:with_rescue) { raise Net::ReadTimeout, "Net::ReadTimeout with #<TCPSocket:(closed)>" }
+    assert_includes result.errors.first, "Net::ReadTimeout"
+  end
+
+  # An exchange error is not ours: it must stay unflagged and unprefixed so the venue's own text
+  # reaches the classifiers verbatim.
+  def test_with_rescue_does_not_flag_api_errors
+    client = Honeymaker::Client.new
+    result = client.send(:with_rescue) { raise Faraday::TimeoutError, "timeout" }
+    assert result.failure?
+    assert_nil result.data[:client_error]
   end
 
   def test_hmac_sha256
