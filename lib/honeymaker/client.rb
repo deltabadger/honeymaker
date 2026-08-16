@@ -74,6 +74,17 @@ module Honeymaker
       Result::Failure.new((msg && !msg.empty?) ? msg : "Unknown error")
     end
 
+    # A business error the exchange returned inside an HTTP-200 envelope (KuCoin's non-"200000"
+    # code, Bitget's non-"00000"). Keep the exchange's own code and message: callers classify on
+    # this text to tell insufficient funds from a bad key from a stale timestamp, so collapsing it
+    # to a bare constant silently disables every one of those checks and leaves the operator with
+    # an unactionable log line. Falls back to the constant only when the body carries no detail.
+    def api_error(exchange, body)
+      detail = body.is_a?(Hash) ? [body["code"], body["msg"] || body["message"]] : []
+      detail = detail.compact.map(&:to_s).reject(&:empty?).join(": ")
+      Result::Failure.new(detail.empty? ? "#{exchange} API error" : "#{exchange} API error #{detail}")
+    end
+
     def connection
       @connection ||= build_client_connection(self.class::URL)
     end

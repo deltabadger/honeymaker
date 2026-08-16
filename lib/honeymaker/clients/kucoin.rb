@@ -39,7 +39,7 @@ module Honeymaker
         result = get_accounts(type: type)
         return result if result.failure?
 
-        return Result::Failure.new("KuCoin API error") unless result.data["code"] == "200000"
+        return api_error("KuCoin", result.data) unless result.data["code"] == "200000"
 
         balances = {}
         (result.data["data"] || []).each do |account|
@@ -61,7 +61,7 @@ module Honeymaker
           timeInForce: time_in_force, stp: stp
         })
         return result if result.failure?
-        return Result::Failure.new("KuCoin API error") unless result.data["code"] == "200000"
+        return api_error("KuCoin", result.data) unless result.data["code"] == "200000"
 
         order_id = result.data.dig("data", "orderId")
         Result::Success.new({ order_id: order_id, raw: result.data })
@@ -70,7 +70,7 @@ module Honeymaker
       def get_order(order_id:)
         result = get_signed("/api/v1/orders/#{order_id}")
         return result if result.failure?
-        return Result::Failure.new("KuCoin API error") unless result.data["code"] == "200000"
+        return api_error("KuCoin", result.data) unless result.data["code"] == "200000"
 
         raw = result.data["data"]
         return Result::Failure.new("Order not found") unless raw

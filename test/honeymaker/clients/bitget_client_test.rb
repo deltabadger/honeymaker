@@ -104,6 +104,37 @@ class Honeymaker::Clients::BitgetTest < Minitest::Test
     assert headers.key?(:"ACCESS-SIGN")
   end
 
+  # Bitget signals business errors in an HTTP-200 envelope. Callers classify on this text
+  # (insufficient funds, bad key, stale timestamp), so the code and msg must survive.
+  def test_place_order_keeps_api_code_and_message
+    stub_connection(:post, { "code" => "43012", "msg" => "Insufficient balance" })
+    result = @client.place_order(symbol: "BTCUSDT", side: "buy", order_type: "market", quote_size: "100")
+    assert result.failure?
+    assert_includes result.errors.first, "Insufficient balance"
+    assert_includes result.errors.first, "43012"
+  end
+
+  def test_get_order_keeps_api_code_and_message
+    stub_connection(:get, { "code" => "40008", "msg" => "Request timestamp expired" })
+    result = @client.get_order(order_id: "BTCUSDT-123")
+    assert result.failure?
+    assert_includes result.errors.first, "Request timestamp expired"
+  end
+
+  def test_get_balances_keeps_api_code_and_message
+    stub_connection(:get, { "code" => "40012", "msg" => "Apikey does not exist" })
+    result = @client.get_balances
+    assert result.failure?
+    assert_includes result.errors.first, "Apikey does not exist"
+  end
+
+  def test_api_error_falls_back_when_body_carries_no_detail
+    stub_connection(:post, { "code" => nil })
+    result = @client.place_order(symbol: "BTCUSDT", side: "buy", order_type: "market", quote_size: "100")
+    assert result.failure?
+    assert_equal "Bitget API error", result.errors.first
+  end
+
   private
 
   def stub_connection(method, body)
