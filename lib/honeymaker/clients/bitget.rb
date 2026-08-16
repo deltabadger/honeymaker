@@ -44,7 +44,7 @@ module Honeymaker
         result = get_account_assets
         return result if result.failure?
 
-        return Result::Failure.new("Bitget API error") unless result.data["code"] == "00000"
+        return api_error("Bitget", result.data) unless result.data["code"] == "00000"
 
         balances = {}
         (result.data["data"] || []).each do |asset|
@@ -64,7 +64,7 @@ module Honeymaker
           size: size, quoteSize: quote_size, price: price, force: force, clientOid: client_oid
         })
         return result if result.failure?
-        return Result::Failure.new("Bitget API error") unless result.data["code"] == "00000"
+        return api_error("Bitget", result.data) unless result.data["code"] == "00000"
 
         order_id = result.data.dig("data", "orderId")
         Result::Success.new({ order_id: "#{symbol}-#{order_id}", raw: result.data })
@@ -73,7 +73,7 @@ module Honeymaker
       def get_order(order_id: nil, client_oid: nil)
         result = get_signed("/api/v2/spot/trade/orderInfo", { orderId: order_id, clientOid: client_oid })
         return result if result.failure?
-        return Result::Failure.new("Bitget API error") unless result.data["code"] == "00000"
+        return api_error("Bitget", result.data) unless result.data["code"] == "00000"
 
         order_list = result.data["data"]
         raw = order_list.is_a?(Array) ? order_list.first : order_list

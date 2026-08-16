@@ -57,6 +57,11 @@ module Honeymaker
         return result if result.failure?
 
         raw = result.data
+        # BingX rejects with HTTP 200 and a non-zero `code`. Without this the rejection fell
+        # through as a Success carrying order_id "#{symbol}-" (nil id): the bot recorded a trade
+        # that was never placed, then polled a malformed id forever.
+        return api_error("BingX", raw) unless raw.is_a?(Hash) && raw["code"].to_i.zero?
+
         order_id = raw.dig("data", "orderId") || raw.dig("data", "data", "orderId")
         Result::Success.new({ order_id: "#{symbol}-#{order_id}", raw: raw })
       end
@@ -66,8 +71,9 @@ module Honeymaker
           symbol: symbol, orderId: order_id, clientOrderID: client_order_id
         })
         return result if result.failure?
+        return api_error("BingX", result.data) unless result.data.is_a?(Hash) && result.data["code"].to_i.zero?
 
-        raw = result.data.is_a?(Hash) && result.data.key?("data") ? result.data["data"] : result.data
+        raw = result.data.key?("data") ? result.data["data"] : result.data
         Result::Success.new(normalize_order("#{symbol}-#{raw['orderId']}", raw))
       end
 

@@ -41,6 +41,30 @@ class Honeymaker::Clients::BingXTest < Minitest::Test
     assert result.success?
   end
 
+  # BingX rejects with HTTP 200 and a non-zero `code`. Without a guard the rejection was read as
+  # a placed order and handed back as order_id "BTC-USDT-" (nil id), so a bot recorded a trade
+  # that does not exist and then polled a malformed id forever.
+  def test_place_order_fails_on_nonzero_code
+    stub_connection(:post, { "code" => 100004, "msg" => "insufficient balance" })
+    result = @client.place_order(symbol: "BTC-USDT", side: "BUY", type: "MARKET", quantity: "0.001")
+    assert result.failure?
+    assert_includes result.errors.first, "insufficient balance"
+  end
+
+  def test_get_order_fails_on_nonzero_code
+    stub_connection(:get, { "code" => 80016, "msg" => "Order does not exist" })
+    result = @client.get_order(symbol: "BTC-USDT", order_id: "123")
+    assert result.failure?
+    assert_includes result.errors.first, "Order does not exist"
+  end
+
+  def test_place_order_succeeds_on_zero_code
+    stub_connection(:post, { "code" => 0, "data" => { "orderId" => "123" } })
+    result = @client.place_order(symbol: "BTC-USDT", side: "BUY", type: "MARKET", quantity: "0.001")
+    assert result.success?
+    assert_equal "BTC-USDT-123", result.data[:order_id]
+  end
+
   def test_cancel_order
     stub_connection(:post, { "data" => { "orderId" => "123" } })
     result = @client.cancel_order(symbol: "BTC-USDT", order_id: "123")

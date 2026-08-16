@@ -107,6 +107,37 @@ class Honeymaker::Clients::KucoinTest < Minitest::Test
     assert_equal expected, headers[:"KC-API-PASSPHRASE"]
   end
 
+  # KuCoin signals business errors in an HTTP-200 envelope. Callers classify on this text
+  # (insufficient funds, bad key, stale timestamp), so the code and msg must survive.
+  def test_place_order_keeps_api_code_and_message
+    stub_connection(:post, { "code" => "200004", "msg" => "Balance insufficient!" })
+    result = @client.place_order(client_oid: "c1", side: "buy", symbol: "BTC-USDT", type: "market", funds: "100")
+    assert result.failure?
+    assert_includes result.errors.first, "Balance insufficient!"
+    assert_includes result.errors.first, "200004"
+  end
+
+  def test_get_order_keeps_api_code_and_message
+    stub_connection(:get, { "code" => "400002", "msg" => "Invalid KC-API-TIMESTAMP." })
+    result = @client.get_order(order_id: "123")
+    assert result.failure?
+    assert_includes result.errors.first, "Invalid KC-API-TIMESTAMP."
+  end
+
+  def test_get_balances_keeps_api_code_and_message
+    stub_connection(:get, { "code" => "400003", "msg" => "KC-API-KEY not exists" })
+    result = @client.get_balances
+    assert result.failure?
+    assert_includes result.errors.first, "KC-API-KEY not exists"
+  end
+
+  def test_api_error_falls_back_when_body_carries_no_detail
+    stub_connection(:post, { "code" => nil })
+    result = @client.place_order(client_oid: "c1", side: "buy", symbol: "BTC-USDT", type: "market", funds: "100")
+    assert result.failure?
+    assert_equal "KuCoin API error", result.errors.first
+  end
+
   private
 
   def stub_connection(method, body)
