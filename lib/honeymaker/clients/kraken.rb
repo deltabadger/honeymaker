@@ -65,9 +65,13 @@ module Honeymaker
         post_private("/0/private/CancelOrder", { nonce: nonce, txid: txid, cl_ord_id: cl_ord_id })
       end
 
-      def get_tradable_asset_pairs(pairs: nil, info: nil, country_code: nil)
+      # aclass_base: "all" also returns tokenized equities (xStocks); omitted, Kraken serves only the
+      # "currency" class. Note the asset-class parameter is spelled differently per endpoint —
+      # aclass_base here, asset_class on Ticker/OHLC/Depth/AddOrder.
+      def get_tradable_asset_pairs(pairs: nil, info: nil, country_code: nil, aclass_base: nil)
         get_public("/0/public/AssetPairs", {
-          pair: pairs ? pairs.join(",") : nil, info: info, country_code: country_code
+          pair: pairs ? pairs.join(",") : nil, info: info, country_code: country_code,
+          aclass_base: aclass_base
         })
       end
 

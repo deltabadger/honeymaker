@@ -48,15 +48,25 @@ module Honeymaker
 
       def get_tickers_info
         with_rescue do
-          response = connection.get("/0/public/AssetPairs")
+          # aclass_base=all, not a bare call: the default response carries only the "currency" class,
+          # so Kraken tokenized equities (xStocks) are invisible without it. One request returns both
+          # classes and they are disjoint.
+          response = connection.get("/0/public/AssetPairs", { aclass_base: "all" })
 
           error = response.body["error"]
           return Result::Failure.new(*error) if error.is_a?(Array) && error.any?
 
-          response.body["result"].filter_map do |_, info|
+          # Every tokenized pair is returned TWICE - once under an SPV key (NVDASPVUSD), once under
+          # the x key (NVDAxUSD) - sharing one wsname and altname. Currency pairs are never
+          # duplicated, so keying by wsname collapses exactly the aliases and nothing else.
+          deduped = response.body["result"].each_with_object({}) do |(_, info), acc|
             wsname = info["wsname"]
-            next unless wsname && !wsname.empty?
+            next if wsname.nil? || wsname.empty?
 
+            acc[wsname] ||= info
+          end
+
+          deduped.filter_map do |wsname, info|
             base, quote = wsname.split("/")
 
             {
@@ -71,7 +81,15 @@ module Honeymaker
               quote_decimals: info["cost_decimals"],
               price_decimals: info["pair_decimals"],
               available: true,
-              trading_enabled: info.key?("status") ? info["status"] == "online" : true
+              # Tokenized equities are listed but never tradable through this client: AddOrder needs
+              # an asset_class parameter it does not send, and Kraken closes the tokenized order
+              # books to EEA clients over the API regardless of that. Listing them anyway is what
+              # lets a holding be resolved and valued.
+              trading_enabled: if info["aclass_base"] == "tokenized_asset"
+                                 false
+                               else
+                                 info.key?("status") ? info["status"] == "online" : true
+                               end
             }
           end
         end

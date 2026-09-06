@@ -10,7 +10,34 @@
       "cost_decimals": 5,
       "pair_decimals": 1,
       "ordermin": "0.00010000",
-      "costmin": "0.50000"
+      "costmin": "0.50000",
+      "aclass_base": "currency"
+    },
+    "NVDAxUSD": {
+      "altname": "NVDAxUSD",
+      "wsname": "NVDAx/USD",
+      "aclass_base": "tokenized_asset",
+      "base": "NVDAx",
+      "quote": "ZUSD",
+      "lot_decimals": 8,
+      "cost_decimals": 5,
+      "pair_decimals": 2,
+      "ordermin": "0.00000001",
+      "costmin": "0.5",
+      "status": "online"
+    },
+    "NVDASPVUSD": {
+      "altname": "NVDAxUSD",
+      "wsname": "NVDAx/USD",
+      "aclass_base": "tokenized_asset",
+      "base": "NVDAx",
+      "quote": "ZUSD",
+      "lot_decimals": 8,
+      "cost_decimals": 5,
+      "pair_decimals": 2,
+      "ordermin": "0.00000001",
+      "costmin": "0.5",
+      "status": "online"
     }
   }
 }
