@@ -9,6 +9,45 @@ class Honeymaker::Exchanges::KrakenTest < Minitest::Test
     @exchange = Honeymaker::Exchanges::Kraken.new
   end
 
+  # Tokenized equities (xStocks) live behind aclass_base and are invisible to a bare AssetPairs call.
+  # aclass_base=all returns currency + tokenized in one request; the two sets are disjoint.
+  def test_get_tickers_info_requests_every_asset_class
+    response = stub(body: load_fixture("kraken_asset_pairs.json"))
+    connection = stub
+    connection.expects(:get).with("/0/public/AssetPairs", { aclass_base: "all" }).returns(response)
+    @exchange.instance_variable_set(:@connection, connection)
+
+    assert @exchange.get_tickers_info.success?
+  end
+
+  # Kraken returns every tokenized pair TWICE - once under an SPV key, once under the x key - with
+  # one shared wsname and altname. Only tokenized pairs are double-keyed; currency pairs never are.
+  # Mapping the raw response would ingest each of them twice.
+  def test_get_tickers_info_deduplicates_the_spv_alias
+    body = load_fixture("kraken_asset_pairs.json")
+    stub_request(body)
+
+    result = @exchange.get_tickers_info
+
+    nvda = result.data.select { |t| t[:base] == "NVDAx" }
+    assert_equal 1, nvda.size, "NVDAxUSD and NVDASPVUSD are one pair"
+    assert_equal "NVDAxUSD", nvda.first[:ticker]
+  end
+
+  # Listed, so a holding can be resolved and valued; not tradable, because AddOrder needs an
+  # asset_class parameter this client does not send, and Kraken closes the tokenized order books to
+  # EEA clients over the API regardless.
+  def test_tokenized_pairs_are_listed_but_not_trading_enabled
+    body = load_fixture("kraken_asset_pairs.json")
+    stub_request(body)
+
+    nvda = @exchange.get_tickers_info.data.find { |t| t[:base] == "NVDAx" }
+
+    assert_equal "online", body["result"]["NVDAxUSD"]["status"]
+    assert nvda[:available], "listed, so balances resolve"
+    refute nvda[:trading_enabled], "we cannot place these orders"
+  end
+
   def test_get_tickers_info_parses_response
     body = load_fixture("kraken_asset_pairs.json")
     stub_request(body)
@@ -68,7 +107,9 @@ class Honeymaker::Exchanges::KrakenTest < Minitest::Test
     result = @exchange.get_tickers_info
 
     assert result.success?
-    assert_empty result.data
+    # Asserts the wsname-less pair is dropped, not that the whole response is - the fixture now
+    # carries a tokenized pair too.
+    refute result.data.any? { |t| t[:ticker] == "XBTUSDT" }
   end
 
   def test_get_tickers_info_uses_real_costmin
