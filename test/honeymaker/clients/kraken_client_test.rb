@@ -22,6 +22,36 @@ class Honeymaker::Clients::KrakenTest < Minitest::Test
     assert result.data["result"].key?("XBTUSDT")
   end
 
+  # Without aclass_base Kraken serves only the "currency" class, so tokenized equities are invisible.
+  def test_get_tradable_asset_pairs_forwards_aclass_base
+    captured = nil
+    req = stub("req")
+    req.stubs(:url)
+    req.stubs(:headers=)
+    req.stubs(:params=).with { |p| captured = p; true }
+    connection = stub
+    connection.stubs(:get).yields(req).returns(stub(body: { "error" => [], "result" => {} }))
+    @client.instance_variable_set(:@connection, connection)
+
+    assert @client.get_tradable_asset_pairs(aclass_base: "all").success?
+    assert_equal "all", captured[:aclass_base]
+  end
+
+  def test_get_tradable_asset_pairs_omits_aclass_base_when_not_asked
+    captured = nil
+    req = stub("req")
+    req.stubs(:url)
+    req.stubs(:headers=)
+    req.stubs(:params=).with { |p| captured = p; true }
+    connection = stub
+    connection.stubs(:get).yields(req).returns(stub(body: { "error" => [], "result" => {} }))
+    @client.instance_variable_set(:@connection, connection)
+
+    @client.get_tradable_asset_pairs
+
+    refute captured.key?(:aclass_base), "params are compacted, so nil must not be sent"
+  end
+
   def test_get_ticker_information
     stub_connection(:get, { "error" => [], "result" => { "XBTUSDT" => { "a" => ["50000"] } } })
     result = @client.get_ticker_information(pair: "XBTUSDT")
