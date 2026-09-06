@@ -1,12 +1,30 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require "digest"
 
 class Honeymaker::Exchanges::MexcTest < Minitest::Test
   include FixtureHelper
 
   def setup
     @exchange = Honeymaker::Exchanges::Mexc.new
+  end
+
+  # H1. MEXC's exchangeInfo has never carried Binance's status encoding. The fixture this file
+  # drives was a hand-edited clone of the Binance one ("TRADING"/"HALT", LOT_SIZE/PRICE_FILTER/
+  # MIN_NOTIONAL filters) written from the same wrong assumption as the parser it tested, so both
+  # agreed and both were wrong. Asserting the raw bytes is the only guard that survives an author
+  # who believes the wrong thing twice; the digest also binds this file to deltabadger's copy, which
+  # drives the same capture through the other implementation of this contract.
+  def test_fixture_carries_mexcs_own_status_encoding
+    body = load_fixture("mexc_exchange_info.json")
+
+    assert_equal "1", body["symbols"].first["status"]
+    refute body["symbols"].any? { |s| s["status"] == "TRADING" }
+    refute body["symbols"].any? { |s| s["filters"].any? { |f| f["filterType"] == "LOT_SIZE" } }
+
+    assert_equal "13a65c0c8ebde52fac4cdca9a5be9d9a18ba7b5438c496b1b30606cf52fd60d3",
+                 Digest::SHA256.hexdigest(File.read(fixture_path("mexc_exchange_info.json")))
   end
 
   def test_get_tickers_info_parses_response
@@ -19,40 +37,42 @@ class Honeymaker::Exchanges::MexcTest < Minitest::Test
     assert_equal 2, result.data.size
 
     ticker = result.data.first
-    assert_equal "BTCUSDT", ticker[:ticker]
-    assert_equal "BTC", ticker[:base]
+    assert_equal "METALUSDT", ticker[:ticker]
+    assert_equal "METAL", ticker[:base]
     assert_equal "USDT", ticker[:quote]
-    assert_equal "0.00001", ticker[:minimum_base_size]
-    assert_equal "5", ticker[:minimum_quote_size]
-    assert_equal "9000", ticker[:maximum_base_size]
-    assert_equal 5, ticker[:base_decimals]
-    assert_equal 8, ticker[:quote_decimals]
-    assert_equal 2, ticker[:price_decimals]
     assert ticker[:available]
     assert ticker[:trading_enabled]
   end
 
-  def test_halted_symbol_listed_but_not_trading_enabled
+  # H2. status is "1" for every MEXC symbol, including the 103 the venue will not accept a spot
+  # order for. The status check alone re-enables all of them; isSpotTradingAllowed is what keeps
+  # them out of the picker.
+  def test_a_symbol_mexc_does_not_allow_for_spot_is_not_trading_enabled
     body = load_fixture("mexc_exchange_info.json")
     stub_connection(body)
 
     result = @exchange.get_tickers_info
 
-    halted = result.data.find { |t| t[:ticker] == "ETHUSDT" }
-    assert halted[:available]        # still listed
-    refute halted[:trading_enabled]  # but not trading
+    disallowed = result.data.find { |t| t[:ticker] == "PALMAIUSDT" }
+    assert_equal "1", body["symbols"].last["status"]
+    assert disallowed[:available]        # still listed
+    refute disallowed[:trading_enabled]  # but not spot-tradable
   end
 
-  def test_falls_back_to_precision_fields_when_no_filters
+  # H5. Real MEXC sends only PERCENT_PRICE_BY_SIDE, so the precision fallback is the ONLY path —
+  # there is no filter-bearing symbol to contrast it against.
+  def test_falls_back_to_precision_fields_when_no_size_filters
     body = load_fixture("mexc_exchange_info.json")
     stub_connection(body)
 
     result = @exchange.get_tickers_info
 
-    # ETHUSDT has empty filters, should use baseAssetPrecision/quotePrecision
-    eth = result.data.find { |t| t[:ticker] == "ETHUSDT" }
-    assert_equal 6, eth[:base_decimals]
-    assert_equal 2, eth[:price_decimals]
+    metal = result.data.find { |t| t[:ticker] == "METALUSDT" }
+    assert_equal 2, metal[:base_decimals]   # baseAssetPrecision
+    assert_equal 5, metal[:quote_decimals]  # quoteAssetPrecision
+    assert_equal 5, metal[:price_decimals]  # quotePrecision
+    assert_nil metal[:minimum_base_size]
+    assert_nil metal[:minimum_quote_size]
   end
 
   def test_get_bid_ask_parses_response

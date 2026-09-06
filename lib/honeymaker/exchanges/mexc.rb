@@ -24,7 +24,10 @@ module Honeymaker
               quote_decimals: product["quoteAssetPrecision"],
               price_decimals: f[:price] ? Utils.decimals(f[:price]["tickSize"]) : product["quotePrecision"],
               available: true,
-              trading_enabled: product["status"] == "TRADING"
+              # MEXC encodes status as "1", not Binance's "TRADING" — every symbol it returns is "1".
+              # isSpotTradingAllowed is the real gate: ~5% of listed symbols reject a spot order.
+              # `!= false` keeps the fail-open default if the key is ever absent, matching the siblings.
+              trading_enabled: product["status"] == "1" && product["isSpotTradingAllowed"] != false
             }
           end
         end
