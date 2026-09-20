@@ -130,13 +130,13 @@ module Honeymaker
       # --- Trading (requires hyperliquid-rb gem) ---
 
       def order(coin:, is_buy:, size:, limit_px:, order_type: { limit: { tif: "Gtc" } })
-        with_rescue do
+        with_status_rescue do
           exchange_client.order(coin, is_buy: is_buy, sz: size, limit_px: limit_px, order_type: order_type)
         end
       end
 
       def cancel(coin:, oid:)
-        with_rescue do
+        with_status_rescue do
           exchange_client.cancel(coin, oid)
         end
       end
@@ -156,6 +156,28 @@ module Honeymaker
       end
 
       private
+
+      # Trading does not go over this client's Faraday connection: it goes through hyperliquid-rb,
+      # which raises its own error for every non-2xx instead of answering. Client#with_rescue can
+      # only see an unlabelled StandardError there, so it flags it `client_error` — "no clean
+      # answer" — and a caller reading an order placement has to treat that as a request whose fate
+      # is unknown: nothing recorded as rejected, no retry, a line for a human to reconcile against
+      # the venue. But the status is right there on the exception, and it is exactly what tells a
+      # refusal (4xx — the gateway answered, nothing reached the matching engine) from a request the
+      # venue may still have taken (5xx). Hand it back in the same shape every other HTTP failure
+      # has, so one classifier covers both paths.
+      #
+      # Duck-typed on purpose: hyperliquid-rb is an optional dependency loaded only when trading is
+      # used, so its error classes cannot be named here. Anything without a status is classified
+      # exactly as it is everywhere else.
+      def with_status_rescue
+        Result::Success.new(yield)
+      rescue StandardError => e
+        status = e.respond_to?(:status) ? e.status.to_i : 0
+        return with_rescue { raise e } unless status.positive?
+
+        Result::Failure.new(e.message.to_s.empty? ? e.class.to_s : e.message, data: { status: status })
+      end
 
       # Suffix-aware so the whole Hyperliquid cancel family (marginCanceled, scheduledCancel,
       # reduceOnlyCanceled, siblingFilledCanceled, …) maps correctly. A triggered order has fired

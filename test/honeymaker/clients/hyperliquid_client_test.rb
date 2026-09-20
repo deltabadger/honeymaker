@@ -190,6 +190,76 @@ class Honeymaker::Clients::HyperliquidTest < Minitest::Test
     assert result.success?
   end
 
+  # == Raised trading errors keep their HTTP status ==
+  #
+  # Order placement goes through hyperliquid-rb, which raises instead of answering. Whether the
+  # venue REFUSED the request or may have TAKEN it is the whole question for a caller deciding
+  # between "record a rejected order" and "a human has to go and look" — and the status is the only
+  # thing that answers it. It must survive the trip.
+
+  # hyperliquid-rb's ClientError/ServerError shape. Rebuilt here because the gem is an optional
+  # dependency this one does not carry.
+  class RaisedWithStatus < StandardError
+    attr_reader :status
+
+    def initialize(message, status:)
+      @status = status
+      super(message)
+    end
+  end
+
+  def test_order_reports_a_refusal_with_its_status
+    @client.stubs(:exchange_client).raises(RaisedWithStatus.new("HTTP 429: rate limited", status: 429))
+
+    result = @client.order(coin: "@142", is_buy: true, size: 1, limit_px: 100)
+
+    assert result.failure?
+    assert_equal 429, result.data[:status]
+    assert_nil result.data[:client_error], "the venue answered — this is not an unknown outcome"
+    assert_equal ["HTTP 429: rate limited"], result.errors
+  end
+
+  # 5xx stays 5xx: a gateway that may have passed the order on is exactly the case a caller must
+  # keep treating as unresolved.
+  def test_order_reports_a_gateway_failure_with_its_status
+    @client.stubs(:exchange_client).raises(RaisedWithStatus.new("HTTP 502: bad gateway", status: 502))
+
+    result = @client.order(coin: "@142", is_buy: true, size: 1, limit_px: 100)
+
+    assert result.failure?
+    assert_equal 502, result.data[:status]
+  end
+
+  def test_cancel_reports_a_refusal_with_its_status
+    @client.stubs(:exchange_client).raises(RaisedWithStatus.new("HTTP 422: unknown oid", status: 422))
+
+    result = @client.cancel(coin: "@142", oid: 1)
+
+    assert result.failure?
+    assert_equal 422, result.data[:status]
+  end
+
+  # Everything the venue did not answer is untouched: a signing crash inside the gem, a network
+  # failure, a bug here. Those stay flagged as ours and unclassifiable.
+  def test_order_leaves_a_statusless_error_classified_as_before
+    @client.stubs(:exchange_client).raises(TypeError, "String can't be coerced into Float")
+
+    result = @client.order(coin: "@142", is_buy: true, size: 1, limit_px: 100)
+
+    assert result.failure?
+    assert result.data[:client_error], "no status means no answer from the venue"
+    assert_equal ["TypeError: String can't be coerced into Float"], result.errors
+  end
+
+  def test_order_wraps_an_accepted_placement
+    @client.stubs(:exchange_client).returns(stub(order: { "status" => "ok" }))
+
+    result = @client.order(coin: "@142", is_buy: true, size: 1, limit_px: 100)
+
+    assert result.success?
+    assert_equal({ "status" => "ok" }, result.data)
+  end
+
   private
 
   def stub_connection(method, body)
