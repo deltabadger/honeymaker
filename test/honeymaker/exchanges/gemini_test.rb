@@ -87,7 +87,7 @@ class Honeymaker::Exchanges::GeminiTest < Minitest::Test
     result = @exchange.get_tickers_info
 
     assert result.failure?
-    assert_nil result.data
+    refute_kind_of Array, result.data, "no partial catalogue"
     assert_equal ["end of file reached"], result.errors
     assert_equal [0.5, 0.5, 0.5, 2, 0.5, 4, 0.5], @sleeps
   end

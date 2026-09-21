@@ -71,13 +71,21 @@ module Honeymaker
 
     private
 
+    # No HTTP answer means the transport failed, and its text rarely says how ("end of file
+    # reached"). The chain of exception classes does — whether the request never left or may have
+    # landed — so it travels with the failure. Facts only: what they mean is the caller's call.
+    def transport_data(error, status)
+      status.nil? ? { status: nil, error_chain: Utils.error_chain(error) } : { status: status }
+    end
+
     def with_rescue
       Result::Success.new(yield)
     rescue Faraday::Error => e
       body = e.respond_to?(:response_body) ? e.response_body : nil
       error_message = (body && !body.empty?) ? body : e.message.to_s
       error_message = "Unknown API error" if error_message.nil? || error_message.empty?
-      Result::Failure.new(error_message)
+      status = e.respond_to?(:response_status) ? e.response_status : nil
+      Result::Failure.new(error_message, data: transport_data(e, status))
     rescue StandardError => e
       msg = e.message
       Result::Failure.new((msg && !msg.empty?) ? msg : "Unknown error")
