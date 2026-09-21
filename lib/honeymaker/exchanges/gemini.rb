@@ -5,13 +5,24 @@ module Honeymaker
     class Gemini < Exchange
       BASE_URL = "https://api.gemini.com"
 
+      # Gemini has no bulk symbol-details endpoint, so the catalogue is one request per symbol --
+      # ~350 of them against a public limit of 120/min. Unpaced they ran at ~208/min, and a single
+      # dropped connection failed the whole catalogue: the adapter retries nothing on its own.
+      REQUEST_INTERVAL = 0.5
+      REQUEST_ATTEMPTS = 3
+      TRANSIENT_ERRORS = [
+        Faraday::ConnectionFailed, Faraday::TimeoutError, Faraday::RequestTimeoutError,
+        Faraday::TooManyRequestsError, Faraday::ServerError
+      ].freeze
+
       def get_tickers_info
         with_rescue do
-          symbols_response = connection.get("/v1/symbols")
-          symbols = symbols_response.body
+          symbols = catalogue_get("/v1/symbols")
 
           symbols.filter_map do |symbol|
-            detail = connection.get("/v1/symbols/details/#{symbol}").body
+            # A symbol that still fails raises, failing the WHOLE catalogue. Never skip it: callers
+            # read a pair missing from the catalogue as delisted, and data-api revokes it.
+            detail = catalogue_get("/v1/symbols/details/#{symbol}")
 
             tick_size = detail["tick_size"]&.to_s || "0.01"
             quote_increment = detail["quote_increment"]&.to_s || "0.01"
@@ -49,6 +60,20 @@ module Honeymaker
 
       def connection
         @connection ||= build_connection(BASE_URL)
+      end
+
+      def catalogue_get(path)
+        attempt = 1
+        begin
+          sleep(REQUEST_INTERVAL)
+          connection.get(path).body
+        rescue *TRANSIENT_ERRORS
+          raise if attempt >= REQUEST_ATTEMPTS
+
+          sleep(2**attempt)
+          attempt += 1
+          retry
+        end
       end
     end
   end
