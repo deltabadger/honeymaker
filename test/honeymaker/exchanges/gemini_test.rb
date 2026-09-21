@@ -13,15 +13,7 @@ class Honeymaker::Exchanges::GeminiTest < Minitest::Test
   end
 
   def test_get_tickers_info_parses_response
-    symbols_body = load_fixture("gemini_symbols.json")
-    detail_body = load_fixture("gemini_symbol_detail.json")
-
-    symbols_response = stub(body: symbols_body)
-    detail_response = stub(body: detail_body)
-    connection = stub
-    connection.stubs(:get).with("/v1/symbols").returns(symbols_response)
-    connection.stubs(:get).with { |path| path.start_with?("/v1/symbols/details/") }.returns(detail_response)
-    @exchange.instance_variable_set(:@connection, connection)
+    stub_catalogue(load_fixture("gemini_symbols.json"))
 
     result = @exchange.get_tickers_info
 
@@ -52,7 +44,7 @@ class Honeymaker::Exchanges::GeminiTest < Minitest::Test
     connection = stub_catalogue(%w[btcusd ethusd])
     connection.stubs(:get).with("/v1/symbols/details/ethusd")
               .raises(Faraday::ConnectionFailed, "end of file reached")
-              .then.returns(detail_response)
+              .then.returns(stub(body: detail_for("ethusd")))
 
     result = @exchange.get_tickers_info
 
@@ -108,6 +100,44 @@ class Honeymaker::Exchanges::GeminiTest < Minitest::Test
     assert @exchange.get_tickers_info.failure?
   end
 
+  # Gemini lists perpetual swaps in /v1/symbols with the same base and quote as the spot pair
+  # (BTCGUSDPERP is BTC/GUSD). They are not spot instruments, and would take the spot pair's place.
+  def test_get_tickers_info_keeps_only_spot_instruments
+    connection = stub_catalogue(%w[btcusd btcusdperp])
+    connection.stubs(:get).with("/v1/symbols/details/btcusdperp")
+              .returns(stub(body: detail_body.merge("symbol" => "BTCUSDPERP", "product_type" => "swap")))
+
+    result = @exchange.get_tickers_info
+
+    assert result.success?
+    assert_equal %w[BTCUSD], result.data.map { |t| t[:ticker] }
+  end
+
+  # An unclassified instrument is not assumed to be spot: the whole catalogue fails, and callers keep
+  # the one they have.
+  def test_get_tickers_info_fails_when_a_symbol_has_no_product_type
+    connection = stub_catalogue(%w[btcusd ethusd])
+    connection.stubs(:get).with("/v1/symbols/details/ethusd")
+              .returns(stub(body: detail_body.except("product_type").merge("symbol" => "ETHUSD")))
+
+    result = @exchange.get_tickers_info
+
+    assert result.failure?
+    assert_nil result.data
+    assert_match(/ethusd/, result.errors.first)
+  end
+
+  def test_get_tickers_info_fails_when_two_instruments_claim_one_pair
+    connection = stub_catalogue(%w[btcusd btcusd2])
+    connection.stubs(:get).with("/v1/symbols/details/btcusd2")
+              .returns(stub(body: detail_body.merge("symbol" => "BTCUSD2")))
+
+    result = @exchange.get_tickers_info
+
+    assert result.failure?
+    assert_match(%r{BTC/USD}, result.errors.first)
+  end
+
   def test_get_bid_ask_parses_response
     body = load_fixture("gemini_pubticker.json")
     stub_connection(body)
@@ -121,17 +151,29 @@ class Honeymaker::Exchanges::GeminiTest < Minitest::Test
 
   private
 
+  def detail_body
+    load_fixture("gemini_symbol_detail.json")
+  end
+
   def detail_response
-    stub(body: load_fixture("gemini_symbol_detail.json"))
+    stub(body: detail_body)
   end
 
   # Every symbol resolves to the one detail fixture; a test overrides a path to make it fail.
+  # Each symbol answers with the fixture's details for its own pair ("ethusd" is ETH/USD), since a
+  # catalogue may not hold two instruments for one pair.
   def stub_catalogue(symbols)
     connection = stub
     connection.stubs(:get).with("/v1/symbols").returns(stub(body: symbols))
-    connection.stubs(:get).with { |path| path.start_with?("/v1/symbols/details/") }.returns(detail_response)
+    symbols.each do |symbol|
+      connection.stubs(:get).with("/v1/symbols/details/#{symbol}").returns(stub(body: detail_for(symbol)))
+    end
     @exchange.instance_variable_set(:@connection, connection)
     connection
+  end
+
+  def detail_for(symbol)
+    detail_body.merge("symbol" => symbol.upcase, "base_currency" => symbol[0, 3], "quote_currency" => symbol[3..])
   end
 
   def stub_connection(body)
