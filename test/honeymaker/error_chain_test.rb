@@ -68,13 +68,23 @@ class Honeymaker::ErrorChainTest < Minitest::Test
 
   # --- The chains the real adapter produces, against local sockets -------------------------------
 
-  def test_real_chain_for_a_connection_closed_before_the_answer
-    server = TCPServer.new("127.0.0.1", 0)
-    Thread.new { loop { (c = server.accept).readpartial(4096) rescue nil; c.close } }
+  def setup
+    @servers = []
+  end
 
-    assert_equal %w[Faraday::ConnectionFailed EOFError], chain_of("http://127.0.0.1:#{server.addr[1]}")
-  ensure
-    server&.close
+  # Closing a server makes its blocked #accept raise, which ends the serving thread; joining it
+  # keeps that thread from outliving the test.
+  def teardown
+    @servers.each do |server, thread|
+      server.close
+      thread.join(1)
+    end
+  end
+
+  def test_real_chain_for_a_connection_closed_before_the_answer
+    port = local_server
+
+    assert_equal %w[Faraday::ConnectionFailed EOFError], chain_of("http://127.0.0.1:#{port}")
   end
 
   def test_real_chain_for_a_refused_connection
@@ -84,24 +94,37 @@ class Honeymaker::ErrorChainTest < Minitest::Test
   end
 
   def test_real_chain_for_a_proxy_refusing_connect
-    proxy = TCPServer.new("127.0.0.1", 0)
-    Thread.new do
-      loop do
-        c = proxy.accept
-        c.readpartial(4096) rescue nil
-        c.write("HTTP/1.1 407 Proxy Authentication Required\r\nContent-Length: 0\r\n\r\n")
-        c.close
-      end
-    end
-    client = Honeymaker::Client.new(proxy: "http://127.0.0.1:#{proxy.addr[1]}")
+    port = local_server("HTTP/1.1 407 Proxy Authentication Required\r\nContent-Length: 0\r\n\r\n")
+    client = Honeymaker::Client.new(proxy: "http://127.0.0.1:#{port}")
     result = client.send(:with_rescue) { client.send(:build_client_connection, "https://example.com").get("/") }
 
     assert_equal %w[Faraday::ConnectionFailed Net::HTTPClientException], result.data[:error_chain]
-  ensure
-    proxy&.close
   end
 
   private
+
+  # A local server that reads each request and answers with `reply`, or hangs up without an answer
+  # when there is none. Returns its port; teardown closes it.
+  def local_server(reply = nil)
+    server = TCPServer.new("127.0.0.1", 0)
+    thread = Thread.new do
+      loop do
+        client = server.accept
+        begin
+          client.readpartial(4096)
+          client.write(reply) if reply
+        rescue EOFError, SystemCallError
+          nil
+        ensure
+          client.close
+        end
+      end
+    rescue IOError, SystemCallError
+      nil # the server was closed in teardown
+    end
+    @servers << [server, thread]
+    server.addr[1]
+  end
 
   def chain_of(url)
     client = Honeymaker::Client.new
