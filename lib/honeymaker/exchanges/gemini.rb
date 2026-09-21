@@ -19,10 +19,11 @@ module Honeymaker
         with_rescue do
           symbols = catalogue_get("/v1/symbols")
 
-          symbols.filter_map do |symbol|
+          tickers = symbols.filter_map do |symbol|
             # A symbol that still fails raises, failing the WHOLE catalogue. Never skip it: callers
             # read a pair missing from the catalogue as delisted, and data-api revokes it.
             detail = catalogue_get("/v1/symbols/details/#{symbol}")
+            next unless spot?(symbol, detail)
 
             tick_size = detail["tick_size"]&.to_s || "0.01"
             quote_increment = detail["quote_increment"]&.to_s || "0.01"
@@ -42,6 +43,7 @@ module Honeymaker
               trading_enabled: detail["status"] == "open"
             }
           end
+          reject_shared_pairs!(tickers)
         end
       end
 
@@ -60,6 +62,25 @@ module Honeymaker
 
       def connection
         @connection ||= build_connection(BASE_URL)
+      end
+
+      # Gemini lists perpetual swaps beside spot, under the same base and quote (BTCGUSDPERP is
+      # BTC/GUSD, product_type "swap"), so only product_type tells them apart. An instrument without
+      # one is not assumed to be spot: the catalogue fails and callers keep the one they have.
+      def spot?(symbol, detail)
+        product_type = detail["product_type"]
+        raise Error, "Gemini #{symbol}: no product_type in its details" unless product_type.is_a?(String)
+
+        product_type == "spot"
+      end
+
+      # One pair, one instrument. Two would leave callers to pick one by list order.
+      def reject_shared_pairs!(tickers)
+        shared = tickers.group_by { |t| "#{t[:base]}/#{t[:quote]}" }.find { |_, group| group.size > 1 }
+        return tickers unless shared
+
+        pair, group = shared
+        raise Error, "Gemini #{pair} is claimed by #{group.map { |t| t[:ticker] }.join(' and ')}"
       end
 
       def catalogue_get(path)
