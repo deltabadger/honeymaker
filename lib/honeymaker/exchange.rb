@@ -69,6 +69,15 @@ module Honeymaker
       3600
     end
 
+    # Venue symbols the last #get_tickers_info saw listed but could not describe, symbol => why. They
+    # are missing from the catalogue WITHOUT being delisted: a caller that reads absence as delisting
+    # must keep what it has for them. Empty for a venue whose catalogue is a single request.
+    # It describes the last get_tickers_info call only; the #tickers_info cache does not carry it, so a
+    # caller that needs both reads them from one get_tickers_info.
+    def unreadable_symbols
+      @unreadable_symbols || {}
+    end
+
     private
 
     # No HTTP answer means the transport failed, and its text rarely says how ("end of file
@@ -76,6 +85,17 @@ module Honeymaker
     # landed — so it travels with the failure. Facts only: what they mean is the caller's call.
     def transport_data(error, status)
       status.nil? ? { status: nil, error_chain: Utils.error_chain(error) } : { status: status }
+    end
+
+    # Records one instrument the venue lists but whose description could not be read, keyed as the
+    # venue emits its ticker. The reason is what a person needs to see: the venue's own answer when it
+    # gave one ("HTTP 400 {...InvalidSymbol...}"), otherwise the exception.
+    def set_aside(symbol, error)
+      status = error.respond_to?(:response_status) ? error.response_status : nil
+      body = error.respond_to?(:response_body) ? error.response_body.to_s : ""
+      why = body.empty? ? "#{error.class}: #{error.message}" : body
+      (@unreadable_symbols ||= {})[symbol.to_s.upcase] = (status ? "HTTP #{status} #{why}" : why)[0, 200]
+      nil
     end
 
     def with_rescue

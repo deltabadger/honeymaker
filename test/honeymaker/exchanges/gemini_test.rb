@@ -76,28 +76,27 @@ class Honeymaker::Exchanges::GeminiTest < Minitest::Test
     end
   end
 
-  # All or nothing: data-api reads a pair missing from the catalogue as delisted, so a symbol that
-  # keeps failing must fail the whole catalogue, and nothing after it is fetched.
-  def test_get_tickers_info_fails_whole_catalogue_when_a_symbol_keeps_failing
+  # Set aside, not fatal: a symbol that keeps failing is left out and named, and the run goes on.
+  def test_get_tickers_info_sets_aside_a_symbol_that_keeps_failing
     connection = stub_catalogue(%w[btcusd ethusd solusd])
     connection.expects(:get).with("/v1/symbols/details/ethusd").times(3)
               .raises(Faraday::ConnectionFailed, "end of file reached")
-    connection.expects(:get).with("/v1/symbols/details/solusd").never
 
     result = @exchange.get_tickers_info
 
-    assert result.failure?
-    refute_kind_of Array, result.data, "no partial catalogue"
-    assert_equal ["end of file reached"], result.errors
-    assert_equal [0.5, 0.5, 0.5, 2, 0.5, 4, 0.5], @sleeps
+    assert result.success?
+    assert_equal %w[BTCUSD SOLUSD], result.data.map { |t| t[:ticker] }
+    assert_equal({ "ETHUSD" => "Faraday::ConnectionFailed: end of file reached" }, @exchange.unreadable_symbols)
+    assert_equal [0.5, 0.5, 0.5, 2, 0.5, 4, 0.5, 0.5], @sleeps
   end
 
   def test_get_tickers_info_does_not_retry_a_non_transient_error
-    connection = stub_catalogue(%w[btcusd])
+    connection = stub_catalogue(%w[btcusd ethusd])
     connection.expects(:get).with("/v1/symbols/details/btcusd").once
               .raises(Faraday::ResourceNotFound, "404")
 
-    assert @exchange.get_tickers_info.failure?
+    assert_equal %w[ETHUSD], @exchange.get_tickers_info.data.map { |t| t[:ticker] }
+    assert_equal %w[BTCUSD], @exchange.unreadable_symbols.keys
   end
 
   # Gemini lists perpetual swaps in /v1/symbols with the same base and quote as the spot pair
@@ -113,29 +112,29 @@ class Honeymaker::Exchanges::GeminiTest < Minitest::Test
     assert_equal %w[BTCUSD], result.data.map { |t| t[:ticker] }
   end
 
-  # An unclassified instrument is not assumed to be spot: the whole catalogue fails, and callers keep
-  # the one they have.
-  def test_get_tickers_info_fails_when_a_symbol_has_no_product_type
+  # An unclassified instrument is not assumed to be spot: it is set aside, and callers keep what
+  # they have for it.
+  def test_get_tickers_info_sets_aside_a_symbol_with_no_product_type
     connection = stub_catalogue(%w[btcusd ethusd])
     connection.stubs(:get).with("/v1/symbols/details/ethusd")
               .returns(stub(body: detail_body.except("product_type").merge("symbol" => "ETHUSD")))
 
     result = @exchange.get_tickers_info
 
-    assert result.failure?
-    assert_nil result.data
-    assert_match(/ethusd/, result.errors.first)
+    assert_equal %w[BTCUSD], result.data.map { |t| t[:ticker] }
+    assert_match(/ethusd: no product_type/, @exchange.unreadable_symbols["ETHUSD"])
   end
 
-  def test_get_tickers_info_fails_when_two_instruments_claim_one_pair
-    connection = stub_catalogue(%w[btcusd btcusd2])
+  def test_get_tickers_info_sets_aside_both_instruments_claiming_one_pair
+    connection = stub_catalogue(%w[btcusd btcusd2 ethusd])
     connection.stubs(:get).with("/v1/symbols/details/btcusd2")
               .returns(stub(body: detail_body.merge("symbol" => "BTCUSD2")))
 
     result = @exchange.get_tickers_info
 
-    assert result.failure?
-    assert_match(%r{BTC/USD}, result.errors.first)
+    assert_equal %w[ETHUSD], result.data.map { |t| t[:ticker] }
+    assert_equal %w[BTCUSD BTCUSD2], @exchange.unreadable_symbols.keys.sort
+    assert_match(%r{BTC/USD}, @exchange.unreadable_symbols["BTCUSD"])
   end
 
   def test_get_bid_ask_parses_response
