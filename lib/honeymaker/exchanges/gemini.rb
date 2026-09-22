@@ -15,35 +15,39 @@ module Honeymaker
         Faraday::TooManyRequestsError, Faraday::ServerError
       ].freeze
 
+      # A symbol still failing after its retries is usually the venue or the connection, not the
+      # instrument, and each costs up to ~100 s. Past this many in one run the venue itself is down, so
+      # the whole catalogue fails, as any failure did before.
+      # ponytail: flat per-run budget; raise it if a rollout ever 5xxs a bigger family than this.
+      NO_ANSWER_LIMIT = 10
+
+      # /v1/symbols says what Gemini lists; the details only describe it. A listed symbol whose details
+      # cannot be read this run is SET ASIDE: left out of the catalogue and named in
+      # #unreadable_symbols, which callers must read as "unknown", never as delisted. Gemini lists new
+      # symbols before it can describe them (details/gramsgd answered 400 InvalidSymbol for hours on
+      # 2026-09-22), and failing the whole catalogue for that one left every Gemini pair without a
+      # verdict.
       def get_tickers_info
+        @unreadable_symbols = {}
         with_rescue do
           symbols = catalogue_get("/v1/symbols")
+          no_answers = 0
 
           tickers = symbols.filter_map do |symbol|
-            # A symbol that still fails raises, failing the WHOLE catalogue. Never skip it: callers
-            # read a pair missing from the catalogue as delisted, and data-api revokes it.
-            detail = catalogue_get("/v1/symbols/details/#{symbol}")
-            next unless spot?(symbol, detail)
+            describe(symbol, catalogue_get("/v1/symbols/details/#{symbol}"))
+          rescue *TRANSIENT_ERRORS => e
+            raise if (no_answers += 1) >= NO_ANSWER_LIMIT
 
-            tick_size = detail["tick_size"]&.to_s || "0.01"
-            quote_increment = detail["quote_increment"]&.to_s || "0.01"
-
-            {
-              ticker: symbol.upcase,
-              base: detail["base_currency"].upcase,
-              quote: detail["quote_currency"].upcase,
-              minimum_base_size: detail["min_order_size"],
-              minimum_quote_size: "0",
-              maximum_base_size: nil,
-              maximum_quote_size: nil,
-              base_decimals: Utils.decimals(tick_size),
-              quote_decimals: Utils.decimals(quote_increment),
-              price_decimals: Utils.decimals(quote_increment),
-              available: true,
-              trading_enabled: detail["status"] == "open"
-            }
+            set_aside(symbol, e)
+          rescue StandardError => e
+            set_aside(symbol, e)
           end
-          reject_shared_pairs!(tickers)
+          tickers = set_aside_shared_pairs(tickers)
+          if tickers.empty? && @unreadable_symbols.any?
+            raise Error, "Gemini: no symbol could be read, e.g. #{@unreadable_symbols.first.join(': ')}"
+          end
+
+          tickers
         end
       end
 
@@ -64,23 +68,52 @@ module Honeymaker
         @connection ||= build_connection(BASE_URL)
       end
 
+      def describe(symbol, detail)
+        return unless spot?(symbol, detail)
+
+        tick_size = detail["tick_size"]&.to_s || "0.01"
+        quote_increment = detail["quote_increment"]&.to_s || "0.01"
+
+        {
+          ticker: symbol.upcase,
+          base: detail["base_currency"].upcase,
+          quote: detail["quote_currency"].upcase,
+          minimum_base_size: detail["min_order_size"],
+          minimum_quote_size: "0",
+          maximum_base_size: nil,
+          maximum_quote_size: nil,
+          base_decimals: Utils.decimals(tick_size),
+          quote_decimals: Utils.decimals(quote_increment),
+          price_decimals: Utils.decimals(quote_increment),
+          available: true,
+          trading_enabled: detail["status"] == "open"
+        }
+      end
+
       # Gemini lists perpetual swaps beside spot, under the same base and quote (BTCGUSDPERP is
       # BTC/GUSD, product_type "swap"), so only product_type tells them apart. An instrument without
-      # one is not assumed to be spot: the catalogue fails and callers keep the one they have.
+      # one is not assumed to be spot: it is set aside. So is a body that is not an object -- JSON
+      # served as text/plain arrives as a String, and String#[] finds "product_type" inside it.
       def spot?(symbol, detail)
+        raise Error, "Gemini #{symbol}: details are not an object" unless detail.is_a?(Hash)
+
         product_type = detail["product_type"]
-        raise Error, "Gemini #{symbol}: no product_type in its details" unless product_type.is_a?(String)
+        raise Error, "Gemini #{symbol}: no product_type in its details" unless product_type.is_a?(String) && !product_type.empty?
+        # A missing status would otherwise read as "not open" and revoke the pair.
+        raise Error, "Gemini #{symbol}: no status in its details" unless detail["status"].is_a?(String)
 
         product_type == "spot"
       end
 
-      # One pair, one instrument. Two would leave callers to pick one by list order.
-      def reject_shared_pairs!(tickers)
-        shared = tickers.group_by { |t| "#{t[:base]}/#{t[:quote]}" }.find { |_, group| group.size > 1 }
-        return tickers unless shared
-
-        pair, group = shared
-        raise Error, "Gemini #{pair} is claimed by #{group.map { |t| t[:ticker] }.join(' and ')}"
+      # One pair, one instrument. Two would leave callers to pick one by list order, so neither is
+      # picked: both are set aside until Gemini lists only one.
+      def set_aside_shared_pairs(tickers)
+        shared = tickers.group_by { |t| [t[:base], t[:quote]] }.values.reject(&:one?)
+        shared.each do |group|
+          claim = "Gemini #{group.first[:base]}/#{group.first[:quote]} is claimed by #{group.map { |t| t[:ticker] }.join(' and ')}"
+          group.each { |t| @unreadable_symbols[t[:ticker]] = claim }
+        end
+        tickers - shared.flatten
       end
 
       def catalogue_get(path)
