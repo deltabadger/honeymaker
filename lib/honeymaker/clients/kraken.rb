@@ -87,6 +87,12 @@ module Honeymaker
         post_private("/0/private/BalanceEx", { nonce: nonce })
       end
 
+      # The key's own permission flags (query-funds, withdraw-funds, modify-trades, query-ledger, ...).
+      # Needs no permission itself, so it answers for any valid key.
+      def get_api_key_info
+        post_private("/0/private/GetApiKeyInfo", { nonce: nonce })
+      end
+
       def get_balances
         result = get_extended_balance
         return result if result.failure?
