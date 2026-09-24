@@ -78,6 +78,14 @@ class Honeymaker::Clients::KrakenTest < Minitest::Test
     assert result.success?
   end
 
+  def test_get_api_key_info
+    stub_connection(:post, { "error" => [], "result" => { "apiKeyName" => "bot",
+                                                          "permissions" => %w[query-funds query-ledger] } })
+    result = @client.get_api_key_info
+    assert result.success?
+    assert_equal %w[query-funds query-ledger], result.data["result"]["permissions"]
+  end
+
   def test_get_trades_history
     stub_connection(:post, { "error" => [], "result" => { "trades" => { "T1" => { "pair" => "XBTUSDT" } }, "count" => 1 } })
     result = @client.get_trades_history
