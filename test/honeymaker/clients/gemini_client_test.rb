@@ -72,6 +72,23 @@ class Honeymaker::Clients::GeminiTest < Minitest::Test
     assert result.success?
   end
 
+  # Gemini signs with HMAC-SHA384 of the base64 payload
+  # (https://developer.gemini.com/authentication/api-key); any other digest is rejected.
+  def test_private_requests_are_signed_with_hmac_sha384
+    request = Struct.new(:headers) { def url(_path) = nil }.new
+    connection = Object.new
+    connection.define_singleton_method(:post) do |&block|
+      block.call(request)
+      Struct.new(:body).new({})
+    end
+    @client.instance_variable_set(:@connection, connection)
+
+    @client.get_balances
+
+    payload = request.headers[:"X-GEMINI-PAYLOAD"]
+    assert_equal OpenSSL::HMAC.hexdigest("sha384", "test_secret", payload), request.headers[:"X-GEMINI-SIGNATURE"]
+  end
+
   private
 
   def stub_connection(method, body)

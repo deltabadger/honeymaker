@@ -168,7 +168,8 @@ module Honeymaker
         with_rescue do
           payload = body.compact.merge(request: path, nonce: timestamp_ms.to_s)
           encoded_payload = Base64.strict_encode64(payload.to_json)
-          signature = hmac_sha256(@api_secret, encoded_payload)
+          # HMAC-SHA384, not SHA256: https://developer.gemini.com/authentication/api-key
+          signature = OpenSSL::HMAC.hexdigest("sha384", @api_secret, encoded_payload)
 
           response = connection.post do |req|
             req.url path
