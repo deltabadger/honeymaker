@@ -5,6 +5,8 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug)]
 pub enum Param {
     One(String),
+    /// Repeat the wire key, as URI.encode_www_form does for Arrays. `oflags`
+    /// follows the legacy caller instead: join with commas, or omit when empty.
     Many(Vec<String>),
 }
 
@@ -17,7 +19,8 @@ pub enum Method {
 pub struct Built {
     pub method: Method,
     pub path: &'static str,
-    /// GET: query params in legacy order (Faraday encodes and sorts them). POST: the body's pairs.
+    /// Wire pairs in legacy field order, retaining repeated keys for Many.
+    /// POST includes nonce first; GET callers encode/sort these as query params.
     pub pairs: Vec<(String, String)>,
     /// POST only: the exact form body that is signed.
     pub body: Option<String>,
@@ -160,14 +163,15 @@ pub fn build(
     let (method, path, fields) = layout(op).ok_or_else(|| format!("unknown Kraken op {op}"))?;
     let mut pairs = Vec::new();
     for (wire, name) in fields {
-        let value = match params.get(*name) {
-            None => None,
-            Some(Param::Many(v)) if *name == "oflags" && v.is_empty() => None, // legacy: oflags.any? ? join : nil
-            Some(Param::Many(v)) => Some(v.join(",")),
-            Some(Param::One(s)) => Some(s.clone()),
-        };
-        if let Some(v) = value {
-            pairs.push((wire.to_string(), v));
+        match params.get(*name) {
+            None => {}
+            Some(Param::Many(v)) if *name == "oflags" => {
+                if !v.is_empty() {
+                    pairs.push((wire.to_string(), v.join(",")));
+                }
+            }
+            Some(Param::Many(v)) => pairs.extend(v.iter().map(|s| (wire.to_string(), s.clone()))),
+            Some(Param::One(s)) => pairs.push((wire.to_string(), s.clone())),
         }
     }
     Ok(match method {
@@ -197,4 +201,62 @@ pub fn build(
             }
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_repeats_keys_in_wire_order_after_nonce() {
+        let params = BTreeMap::from([
+            ("consolidate_taker".into(), Param::One("false".into())),
+            ("txid".into(), Param::Many(vec!["O1".into(), "O2".into()])),
+            ("userref".into(), Param::One("7".into())),
+            ("trades".into(), Param::One("true".into())),
+        ]);
+        let built = build("query_orders_info", &params, None).unwrap();
+        assert_eq!(built.method, Method::Post);
+        assert_eq!(built.path, "/0/private/QueryOrders");
+        assert_eq!(built.pairs[0].0, "nonce");
+        assert!(built.pairs[0].1.parse::<u64>().unwrap() > 0);
+        assert_eq!(
+            built.pairs[1..],
+            [
+                ("trades", "true"),
+                ("userref", "7"),
+                ("txid", "O1"),
+                ("txid", "O2"),
+                ("consolidate_taker", "false")
+            ]
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+        );
+        assert_eq!(
+            built.body.unwrap(),
+            format!(
+                "nonce={}&trades=true&userref=7&txid=O1&txid=O2&consolidate_taker=false",
+                built.pairs[0].1
+            )
+        );
+    }
+
+    #[test]
+    fn build_joins_oflags_and_omits_empty_arrays() {
+        let mut params = BTreeMap::from([(
+            "oflags".into(),
+            Param::Many(vec!["viqc".into(), "fciq".into()]),
+        )]);
+        let built = build("add_order", &params, None).unwrap();
+        assert_eq!(built.pairs[1..], [("oflags".into(), "viqc,fciq".into())]);
+        params.insert("oflags".into(), Param::Many(vec![]));
+        assert_eq!(build("add_order", &params, None).unwrap().pairs.len(), 1);
+        params.insert("txid".into(), Param::Many(vec![]));
+        assert_eq!(
+            build("query_orders_info", &params, None)
+                .unwrap()
+                .pairs
+                .len(),
+            1
+        );
+    }
 }

@@ -41,7 +41,11 @@ module ParityHelper
     when BigDecimal
       assert_equal [expected.to_s, expected.sign], [actual.to_s, actual.sign], "#{path}: BigDecimal"
     else
-      assert_equal expected, actual, "#{path}: value"
+      if expected.nil?
+        assert_nil actual, "#{path}: value"
+      else
+        assert_equal expected, actual, "#{path}: value"
+      end
     end
   end
 

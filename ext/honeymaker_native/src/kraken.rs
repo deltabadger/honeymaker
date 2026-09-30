@@ -177,7 +177,7 @@ impl Kraken {
                     let h = ruby.hash_new();
                     for o in list {
                         let e = ruby.hash_new();
-                        e.aset(sym("order_id"), ruby.str_new(&o.order_id))?;
+                        e.aset(sym("order_id"), convert::from_json(ruby, &o.order_id)?)?;
                         e.aset(sym("status"), sym(o.status.as_str()))?;
                         e.aset(
                             sym("side"),
@@ -192,7 +192,7 @@ impl Kraken {
                         e.aset(sym("quote_amount"), opt_dec(ruby, &o.quote_amount))?;
                         e.aset(sym("amount_exec"), o.amount_exec.value())?;
                         e.aset(sym("quote_amount_exec"), o.quote_amount_exec.value())?;
-                        h.aset(ruby.str_new(&o.order_id), e)?; // the wrapper appends :raw last
+                        h.aset(convert::from_json(ruby, &o.order_id)?, e)?; // the wrapper appends :raw last
                     }
                     Ok(h.as_value())
                 },
@@ -201,11 +201,6 @@ impl Kraken {
                 ruby,
                 normalize::add_order::<RubyDecimal>(&json).map_err(|e| norm(ruby, e))?,
                 |id| convert::from_json(ruby, &id),
-            ),
-            "validate" => verdict(
-                ruby,
-                normalize::validate::<RubyDecimal>(&json).map_err(|e| norm(ruby, e))?,
-                |_| Ok(ruby.qtrue().as_value()),
             ),
             other => Err(convert::shape(ruby, &format!("unknown finish op {other}"))),
         }

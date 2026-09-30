@@ -2,6 +2,7 @@ use crate::num::{NormError, Num};
 use crate::semantics::{split_first, truthy};
 use crate::{OrderStatus, OrderType, Side};
 use serde_json::{Map, Value};
+use std::borrow::Cow;
 
 pub enum Finished<T> {
     Ok(T),
@@ -53,14 +54,45 @@ macro_rules! envelope_or_return {
     };
 }
 
-/// `(result.data["result"] || {}).each`.
-fn result_entries(obj: &Map<String, Value>) -> Result<Vec<(&String, &Value)>, String> {
+/// `(result.data["result"] || {}).each do |key, value|`: Array elements are
+/// destructured, with missing values becoming nil and extra values ignored.
+fn result_entries(obj: &Map<String, Value>) -> Result<Vec<(Value, &Value)>, String> {
     match obj.get("result") {
         v if !truthy(v) => Ok(Vec::new()),
-        Some(Value::Object(m)) => Ok(m.iter().collect()),
-        Some(Value::Array(a)) if a.is_empty() => Ok(Vec::new()), // [].each yields nothing: Success({})
+        Some(Value::Object(m)) => Ok(m
+            .iter()
+            .map(|(k, v)| (Value::String(k.clone()), v))
+            .collect()),
+        Some(Value::Array(a)) => Ok(a
+            .iter()
+            .map(|entry| match entry {
+                Value::Array(pair) => (
+                    pair.first().cloned().unwrap_or(Value::Null),
+                    pair.get(1).unwrap_or(&Value::Null),
+                ),
+                other => (other.clone(), &Value::Null),
+            })
+            .collect()),
         Some(other) => Err(format!("result is not an object: {other}")), // legacy raises on these
         None => Ok(Vec::new()),
+    }
+}
+
+/// Legacy string-key indexing accepts both Hash and String. String#[] returns
+/// the requested substring when present, otherwise nil; other shapes raise.
+fn string_fields<'a>(
+    value: &'a Value,
+    keys: &[&str],
+) -> Result<Cow<'a, Map<String, Value>>, String> {
+    match value {
+        Value::Object(m) => Ok(Cow::Borrowed(m)),
+        Value::String(s) => Ok(Cow::Owned(
+            keys.iter()
+                .filter(|key| s.contains(**key))
+                .map(|key| (key.to_string(), Value::String(key.to_string())))
+                .collect(),
+        )),
+        other => Err(format!("cannot index with a String: {other}")),
     }
 }
 
@@ -74,6 +106,9 @@ pub fn balances<D: Num>(data: &Value) -> R<Vec<KrakenBalance<D>>, D> {
     let obj = envelope_or_return!(data);
     let mut out: Vec<KrakenBalance<D>> = Vec::new();
     for (symbol, balance) in result_entries(obj)? {
+        let symbol = symbol
+            .as_str()
+            .ok_or_else(|| format!("symbol.split: {symbol}"))?;
         let first = split_first(symbol, '.');
         let asset = first.map(|f| {
             ASSET_MAP
@@ -82,9 +117,7 @@ pub fn balances<D: Num>(data: &Value) -> R<Vec<KrakenBalance<D>>, D> {
                 .map(|(_, v)| v.to_string())
                 .unwrap_or_else(|| f.to_string())
         });
-        let bal = balance
-            .as_object()
-            .ok_or_else(|| format!("balance entry: {balance}"))?;
+        let bal = string_fields(balance, &["balance", "hold_trade"])?;
         let total: D = dec(bal.get("balance"))?;
         let hold = bal
             .get("hold_trade")
@@ -113,7 +146,7 @@ pub fn balances<D: Num>(data: &Value) -> R<Vec<KrakenBalance<D>>, D> {
 }
 
 pub struct NormalizedOrder<D> {
-    pub order_id: String,
+    pub order_id: Value,
     pub status: OrderStatus,
     pub side: Option<Side>,
     pub order_type: OrderType,
@@ -146,19 +179,24 @@ pub fn orders<D: Num>(data: &Value) -> R<Vec<NormalizedOrder<D>>, D> {
     let empty = Map::new();
     let mut out = Vec::new();
     for (order_id, raw) in result_entries(obj)? {
-        let raw = raw
-            .as_object()
-            .ok_or_else(|| format!("order {order_id}: {raw}"))?;
+        let raw = string_fields(
+            raw,
+            &[
+                "descr", "status", "oflags", "vol", "vol_exec", "cost", "price",
+            ],
+        )?;
         let descr = match raw.get("descr") {
-            v if !truthy(v) => &empty,
-            Some(Value::Object(m)) => m,
-            Some(other) => return Err(format!("descr: {other}").into()),
-            None => &empty,
+            v if !truthy(v) => Cow::Borrowed(&empty),
+            Some(value) => string_fields(value, &["ordertype", "type", "price"])?,
+            None => Cow::Borrowed(&empty),
         };
         let order_type = order_type(descr.get("ordertype"));
         let side = match descr.get("type") {
             None | Some(Value::Null) => None,
-            Some(Value::String(s)) => Some(Side::from_venue(&s.to_lowercase())),
+            // Ruby downcase does not apply contextual final-sigma mapping.
+            Some(Value::String(s)) => Some(Side::from_venue(
+                &s.chars().flat_map(char::to_lowercase).collect::<String>(),
+            )),
             Some(other) => return Err(format!("descr.type: {other}").into()),
         };
         let viqc = match raw.get("oflags") {
@@ -185,7 +223,7 @@ pub fn orders<D: Num>(data: &Value) -> R<Vec<NormalizedOrder<D>>, D> {
             Some(price)
         };
         out.push(NormalizedOrder {
-            order_id: order_id.clone(),
+            order_id,
             status: status(raw.get("status")),
             side,
             order_type,
@@ -210,6 +248,11 @@ pub fn add_order<D: Num>(data: &Value) -> R<Value, D> {
     Ok(Finished::Ok(match txid {
         None => Value::Null,
         Some(Value::Array(a)) => a.first().cloned().unwrap_or(Value::Null),
+        Some(Value::Object(m)) => m
+            .into_iter()
+            .next()
+            .map(|(k, v)| Value::Array(vec![Value::String(k), v]))
+            .unwrap_or(Value::Null),
         Some(other) => return Err(format!("txid: {other}").into()),
     }))
 }
