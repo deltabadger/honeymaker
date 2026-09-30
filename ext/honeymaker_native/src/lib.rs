@@ -1,6 +1,7 @@
 use magnus::{Error, Ruby, function, prelude::*};
 
 mod convert;
+mod kraken;
 mod ruby_decimal;
 
 fn version() -> &'static str {
@@ -72,6 +73,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     ruby.require("bigdecimal")?;
     let native = BoxValue::new(ruby.define_module("Honeymaker")?.define_module("Native")?);
     let ext = BoxValue::new(native.define_module("Ext")?);
+    kraken::define(ruby, *ext)?;
     ext.define_singleton_method("version", function!(version, 0))?;
     ext.define_singleton_method("roundtrip_for_tests", function!(roundtrip_for_tests, 1))?;
     ext.define_singleton_method("decimal_for_tests", function!(decimal_for_tests, 1))?;

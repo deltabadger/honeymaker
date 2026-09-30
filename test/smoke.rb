@@ -10,3 +10,11 @@ spec = Gem.loaded_specs.fetch("honeymaker")
 expected = ENV.fetch("EXPECT_PLATFORM")
 abort "installed platform #{spec.platform} != #{expected}" unless spec.platform.to_s == expected
 puts "smoke ok #{RUBY_VERSION} #{RUBY_PLATFORM} #{spec.full_name}"
+
+require "uri"
+ext = Honeymaker::Native::Ext::Kraken.new("k", "c2VjcmV0")
+path, pairs = ext.build_post("get_extended_balance", {})
+body = URI.encode_www_form(pairs)
+headers = ext.sign(path, body)
+abort "bad build #{path} #{body} #{headers.keys}" unless path == "/0/private/BalanceEx" && body.start_with?("nonce=") && headers["API-Sign"]
+puts "smoke kraken ok"
