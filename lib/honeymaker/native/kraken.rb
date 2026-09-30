@@ -205,5 +205,53 @@ module Honeymaker
         Result::Failure.new(UNREADABLE, data: { unreadable: true })
       end
     end
+
+    class KrakenExchange < Honeymaker::Exchange
+      BASE_URL = "https://api.kraken.com"
+
+      def classify_error(message)
+        return nil if message.nil?
+
+        Native.load!
+        Ext::Kraken.classify_error(message)
+      end
+
+      def get_tickers_info
+        with_rescue do
+          response = connection.get("/0/public/AssetPairs", { aclass_base: "all" })
+          raise ShapeError, "Kraken: catalogue body is not an object" unless response.body.is_a?(Hash)
+
+          verdict = native.finish("tickers_info", response.body)
+          return Result::Failure.new(*response.body["error"]) if verdict[0] == "venue"
+
+          verdict[1].each { |t| t[:minimum_quote_size] = t[:minimum_quote_size].to_s }
+        end
+      end
+
+      def get_bid_ask(symbol)
+        with_rescue do
+          response = connection.get("/0/public/Ticker") { |req| req.params = { pair: symbol } }
+          raise ShapeError, "Kraken: ticker body is not an object" unless response.body.is_a?(Hash)
+
+          verdict = native.finish("bid_ask", response.body)
+          raise StandardError, response.body["error"].first if verdict[0] == "venue"
+
+          verdict[1]
+        end
+      end
+
+      private
+
+      def native
+        @native ||= begin
+          Native.load!
+          Ext::Kraken.new(nil, nil)
+        end
+      end
+
+      def connection
+        @connection ||= build_connection(BASE_URL)
+      end
+    end
   end
 end
