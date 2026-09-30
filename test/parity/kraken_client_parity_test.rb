@@ -244,6 +244,87 @@ class KrakenClientParityTest < Minitest::Test
     end
   end
 
+  def test_invalid_utf8_in_add_order_json
+    ['{"error":[],"result":{"txid":["O1"],"descr":{"order":"buy X"}}}',
+     '{"error":[],"result":{"txid":["OX"]}}'].each do |body|
+      assert_parity([[200, JSON_CT, body.sub("X", "\xff")]]) do |c|
+        c.add_order(ordertype: "market", type: "buy", volume: "1", pair: "X")
+      end
+    end
+  end
+
+  def direct_results(data)
+    [Honeymaker::Clients::Kraken, Honeymaker::Native::KrakenClient].map do |klass|
+      client = klass.new
+      response = Honeymaker::Result::Success.new(data)
+      client.stubs(:get_extended_balance).returns(response)
+      client.stubs(:post_private).returns(response)
+      client.stubs(:get_trades_history).returns(response)
+      begin; yield(client); rescue StandardError => e; e; end
+    end
+  end
+
+  def test_binary_error_text_through_client
+    data = { "error" => ["EAPI:Invalid nonce \xff\xfe".b] }
+    assert_same_ruby(*direct_results(data, &:get_balances))
+  end
+
+  def test_binary_and_invalid_normalizer_values
+    ["\xff", "\xff".b].each do |suffix|
+      data = { "error" => [], "result" => { "txid" => ["O" + suffix] } }
+      assert_same_ruby(*direct_results(data) { |c| c.add_order(ordertype: "market", type: "buy", volume: "1", pair: "X") })
+      ["balance" + suffix, { "balance" => "1" + suffix }].each do |balance|
+        assert_same_ruby(*direct_results({ "result" => { "X" => balance } }, &:get_balances))
+      end
+      raw = { "vol" => "1", "vol_exec" => "1", "cost" => "2", "price" => "0" }
+      [{ "descr" => "type" + suffix }, { "descr" => { "type" => "BUY" + suffix } },
+       { "oflags" => "viqc," + suffix }].each do |over|
+        assert_same_ruby(*direct_results({ "result" => { "O1" => raw.merge(over) } }) { |c| c.query_orders_info(txid: "O1") })
+      end
+    end
+  end
+
+  def test_invalid_string_keys_and_trade_side
+    ["\xff", "\xff".b].each do |suffix|
+      assert_same_ruby(*direct_results({ "result" => { "X" + suffix => { "balance" => "1" } } }, &:get_balances))
+      raw = { "vol" => "1", "vol_exec" => "1", "cost" => "2", "price" => "0" }
+      assert_same_ruby(*direct_results({ "result" => { "O" + suffix => raw } }) { |c| c.query_orders_info(txid: "O1") })
+      trade = { "ordertxid" => "O1", "type" => "BUY" + suffix, "vol" => "1", "cost" => "2", "fee" => "0", "time" => 1 }
+      assert_same_ruby(*direct_results({ "result" => { "trades" => { "T1" => trade }, "count" => 1 } }) do |c|
+        c.closed_orders_from_trades(order_ids: ["O1"])
+      end)
+    end
+  end
+
+  def test_decimal_normalizers_under_gc_stress
+    cases = [
+      [{ "result" => { "XXBT" => { "balance" => "2", "hold_trade" => "0.5" } } }, ->(c) { c.get_balances }],
+      [{ "result" => { "O1" => { "vol" => "1", "vol_exec" => "1", "cost" => "2", "price" => "2" } } },
+       ->(c) { c.query_orders_info(txid: "O1") }],
+      [{ "result" => { "trades" => { "T1" => { "ordertxid" => "O1", "type" => "buy", "ordertype" => "market",
+          "vol" => "1", "cost" => "2", "fee" => "0.1", "time" => 1 } }, "count" => 1 } },
+       ->(c) { c.closed_orders_from_trades(order_ids: ["O1"]) }]
+    ]
+    cases.each do |data, call|
+      results = direct_results(data) do |client|
+        GC.stress = true
+        begin; call.call(client); ensure; GC.stress = false; end
+      end
+      assert_same_ruby(*results)
+    end
+  ensure
+    GC.stress = false
+  end
+
+  def test_unexpected_native_verdict_raises_shape_error
+    client = Honeymaker::Native::KrakenClient.new
+    client.stubs(:native).returns(stub(finish: ["bogus"]))
+    error = assert_raises(Honeymaker::Native::ShapeError) do
+      client.send(:finish, "balances", Honeymaker::Result::Success.new({})) { |x| x }
+    end
+    assert_equal 'unexpected verdict "bogus"', error.message
+  end
+
   def test_unauthenticated_private_call
     assert_parity([venue("EAPI:Invalid key")], key: nil, secret: nil, &:get_extended_balance)
   end

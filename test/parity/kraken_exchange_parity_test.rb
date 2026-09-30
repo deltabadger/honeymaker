@@ -78,6 +78,37 @@ class KrakenExchangeParityTest < Minitest::Test
     assert_parity([200, JSON_CT, '{"error":[],"result":{"X":{"a":[1.5],"b":[1.25]}}}']) { |e| e.get_bid_ask("X") }
   end
 
+  def test_invalid_utf8_ticker_fields_and_price_strings
+    ['{"error":[],"result":{"X":{"altname":"X","wsname":"X/USD"}}}',
+     '{"error":[],"result":{"X":{"altname":"A","wsname":"X/USD"}}}'].each do |body|
+      assert_parity([200, JSON_CT, body.sub('"altname":"X"', '"altname":"X' + "\xff" + '"').sub('"wsname":"X/USD"', '"wsname":"X' + "\xff" + '/USD"')], &:get_tickers_info)
+    end
+    ["1\xff", "\xff1"].each do |value|
+      ["[\"#{value}\"]", "\"#{value}\""].each do |price|
+        body = '{"error":[],"result":{"X":{"a":["2"],"b":' + price + '}}}'
+        assert_parity([200, JSON_CT, body]) { |e| e.get_bid_ask("X") }
+      end
+    end
+  end
+
+  def test_classify_invalid_utf8_keeps_legacy_exception
+    ["EAPI:Invalid nonce \xff", "EAPI:Invalid nonce".encode("UTF-16LE")].each do |message|
+      results = [Honeymaker::Exchanges::Kraken, Honeymaker::Native::KrakenExchange].map do |klass|
+        begin; klass.new.classify_error(message); rescue StandardError => e; e; end
+      end
+      assert_same_ruby(*results)
+    end
+  end
+
+  def test_classify_binary_error_bytes_and_capture_encoding
+    ["EAPI:Invalid nonce \xff\xfe".b,
+     "EAccount:Invalid permissions:X\xff trading restricted for US.".b,
+     "prefix \xff EService:Busy".b, "unknown \xff".b].each do |message|
+      assert_same_ruby(Honeymaker::Exchanges::Kraken.new.classify_error(message),
+                       Honeymaker::Native::KrakenExchange.new.classify_error(message))
+    end
+  end
+
   def test_classify_error_corpus
     ["EAccount:Invalid permissions:NVDAx trading restricted for DE.",
      "EAccount:Invalid permissions:XBT trading restricted for US",

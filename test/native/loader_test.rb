@@ -17,9 +17,10 @@ class Honeymaker::Native::LoaderTest < Minitest::Test
 
   def test_flag_parsing
     Honeymaker::Native.instance_variable_set(:@enabled, nil)
-    ENV["HONEYMAKER_NATIVE"] = " kraken, ,binance "
-    assert_equal %w[kraken binance], Honeymaker::Native.enabled
+    ENV["HONEYMAKER_NATIVE"] = " KRAKEN, ,kraken "
+    assert_equal %w[kraken], Honeymaker::Native.enabled
     assert Honeymaker::Native.enabled?(:kraken)
+    assert Honeymaker::Native.enabled?(" KRAKEN ")
     refute Honeymaker::Native.enabled?("bybit")
   ensure
     ENV.delete("HONEYMAKER_NATIVE")

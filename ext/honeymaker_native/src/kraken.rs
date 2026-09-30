@@ -5,7 +5,10 @@ use honeymaker_core::kraken::requests::{Fields, Method, layout};
 use honeymaker_core::kraken::sign::{self, Credentials};
 use honeymaker_core::kraken::trades::aggregate;
 use honeymaker_core::num::NormError;
-use magnus::{RArray, RHash, Ruby, Value, prelude::*, r_hash::ForEach};
+use magnus::{
+    RArray, RHash, RString, Ruby, Value, encoding::EncodingCapable, prelude::*, r_hash::ForEach,
+    value::BoxValue,
+};
 
 #[magnus::wrap(class = "Honeymaker::Native::Ext::Kraken", free_immediately)]
 pub struct Kraken {
@@ -50,6 +53,13 @@ fn opt_dec(ruby: &Ruby, d: &Option<RubyDecimal>) -> Value {
     d.as_ref()
         .map(|d| d.value())
         .unwrap_or_else(|| ruby.qnil().as_value())
+}
+
+fn side_symbol(ruby: &Ruby, value: Option<&serde_json::Value>) -> Result<Value, magnus::Error> {
+    match value {
+        Some(v) => convert::from_json(ruby, v)?.funcall("to_sym", ()),
+        None => Ok(ruby.qnil().as_value()),
+    }
 }
 
 impl Kraken {
@@ -161,10 +171,7 @@ impl Kraken {
                         let e = ruby.hash_new();
                         e.aset(sym("free"), b.free.value())?;
                         e.aset(sym("locked"), b.locked.value())?;
-                        match b.asset {
-                            Some(a) => h.aset(ruby.str_new(&a), e)?,
-                            None => h.aset(ruby.qnil(), e)?,
-                        }
+                        h.aset(convert::from_json(ruby, &b.asset)?, e)?;
                     }
                     Ok(h.as_value())
                 },
@@ -178,13 +185,7 @@ impl Kraken {
                         let e = ruby.hash_new();
                         e.aset(sym("order_id"), convert::from_json(ruby, &o.order_id)?)?;
                         e.aset(sym("status"), sym(o.status.as_str()))?;
-                        e.aset(
-                            sym("side"),
-                            o.side
-                                .as_ref()
-                                .map(|s| sym(s.as_str()))
-                                .unwrap_or_else(|| ruby.qnil().as_value()),
-                        )?;
+                        e.aset(sym("side"), side_symbol(ruby, o.side.as_ref())?)?;
                         e.aset(sym("order_type"), sym(o.order_type.as_str()))?;
                         e.aset(sym("price"), opt_dec(ruby, &o.price))?;
                         e.aset(sym("amount"), opt_dec(ruby, &o.amount))?;
@@ -203,19 +204,14 @@ impl Kraken {
             ),
             "tickers_info" => verdict(
                 ruby,
-                normalize::tickers(&json).map_err(|m| convert::shape(ruby, &m))?,
+                normalize::tickers::<RubyDecimal>(&json).map_err(|e| norm(ruby, e))?,
                 |list| {
                     let out = ruby.ary_new();
                     for t in list {
                         let h = ruby.hash_new();
-                        let opt_str = |s: &Option<String>| {
-                            s.as_deref()
-                                .map(|x| ruby.str_new(x).as_value())
-                                .unwrap_or_else(|| ruby.qnil().as_value())
-                        };
                         h.aset(sym("ticker"), convert::from_json(ruby, &t.ticker)?)?;
-                        h.aset(sym("base"), opt_str(&t.base))?;
-                        h.aset(sym("quote"), opt_str(&t.quote))?;
+                        h.aset(sym("base"), convert::from_json(ruby, &t.base)?)?;
+                        h.aset(sym("quote"), convert::from_json(ruby, &t.quote)?)?;
                         h.aset(
                             sym("minimum_base_size"),
                             convert::from_json(ruby, &t.minimum_base_size)?,
@@ -281,13 +277,7 @@ impl Kraken {
                 first.funcall::<_, _, Value>("[]", ("ordertxid",))?,
             )?;
             h.aset(sym("status"), sym("closed"))?;
-            h.aset(
-                sym("side"),
-                a.side
-                    .as_deref()
-                    .map(sym)
-                    .unwrap_or_else(|| ruby.qnil().as_value()),
-            )?;
+            h.aset(sym("side"), side_symbol(ruby, a.side.as_ref())?)?;
             h.aset(sym("order_type"), sym(a.order_type.as_str()))?;
             h.aset(sym("price"), opt_dec(ruby, &a.price))?;
             h.aset(sym("amount"), ruby.qnil())?;
@@ -310,14 +300,25 @@ impl Kraken {
         Ok(out)
     }
 
-    fn classify_error(ruby: &Ruby, message: String) -> Result<Value, magnus::Error> {
-        Ok(match normalize::classify_error(&message) {
+    fn classify_error(ruby: &Ruby, message: RString) -> Result<Value, magnus::Error> {
+        let message = BoxValue::new(message);
+        let encoding: Value = message.funcall("encoding", ())?;
+        if !encoding.funcall::<_, _, bool>("ascii_compatible?", ())?
+            || !message.funcall::<_, _, bool>("valid_encoding?", ())?
+        {
+            // Let Ruby raise its exact regexp encoding exception before byte matching.
+            message.funcall::<_, _, Value>("match", ("",))?;
+        }
+        let bytes = unsafe { message.as_slice() }.to_vec();
+        Ok(match normalize::classify_error(&bytes) {
             None => ruby.qnil().as_value(),
             Some((code, caps)) => {
                 let h = ruby.hash_new();
                 h.aset(sym("code"), sym(code))?;
                 for (k, v) in caps {
-                    h.aset(sym(k), ruby.str_new(&v))?;
+                    let capture = BoxValue::new(ruby.str_from_slice(&v));
+                    capture.enc_associate(message.enc_get())?;
+                    h.aset(sym(k), *capture)?;
                 }
                 h.as_value()
             }

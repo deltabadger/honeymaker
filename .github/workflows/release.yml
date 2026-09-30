@@ -4,6 +4,9 @@ on:
   push:
     tags: ["v*"]
 
+permissions:
+  contents: read
+
 jobs:
   gems:
     uses: ./.github/workflows/native-gems.yml
@@ -16,16 +19,17 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v4 # FIRST: checkout cleans the workspace, so it must not run after the download
-      - uses: actions/download-artifact@v4
+      # Checkout cleans the workspace, so it must precede artifact download.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: gem-*
           merge-multiple: true
           path: gems
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
         with:
           ruby-version: "3.4"
-      - uses: rubygems/configure-rubygems-credentials@v1.0.0
+      - uses: rubygems/configure-rubygems-credentials@bc6dd217f8a4f919d6835fcfefd470ef821f5c44 # v1.0.0
         with:
           trusted-publisher: true
       - name: Push platform gems first, the source gem last (idempotent)

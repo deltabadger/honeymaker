@@ -2,19 +2,30 @@
 
 module Honeymaker
   # Rust-backed venue logic. A process picks its backend per exchange once, when honeymaker is
-  # required: HONEYMAKER_NATIVE=kraken[,binance]. With the flag off the extension is never loaded.
+  # required: HONEYMAKER_NATIVE=kraken. With the flag off the extension is never loaded.
   module Native
     # A venue payload whose shape legacy would have tripped over with an incidental NoMethodError
     # or TypeError. Still a StandardError, which is all consumers rescue.
     class ShapeError < StandardError; end
 
+    SUPPORTED = %w[kraken].freeze
+
     class << self
       def enabled
-        @enabled ||= ENV.fetch("HONEYMAKER_NATIVE", "").split(",").map(&:strip).reject(&:empty?).freeze
+        @enabled ||= begin
+          names = ENV.fetch("HONEYMAKER_NATIVE", "").split(",").map { |name| name.strip.downcase }.reject(&:empty?).uniq
+          unsupported = names - SUPPORTED
+          unless unsupported.empty?
+            raise ArgumentError, "Unsupported HONEYMAKER_NATIVE names: #{unsupported.join(', ')}; supported names: #{SUPPORTED.join(', ')}"
+          end
+          names.freeze
+        end
       end
 
       def enabled?(name)
-        enabled.include?(name.to_s)
+        name = name.to_s.strip.downcase
+        names = enabled
+        SUPPORTED.include?(name) && names.include?(name)
       end
 
       def load!

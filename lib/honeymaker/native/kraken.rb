@@ -198,6 +198,7 @@ module Honeymaker
         when "ok" then Result::Success.new(yield(verdict[1]))
         when "venue" then Result::Failure.new(*result.data["error"])
         when "unreadable" then unreadable
+        else raise ShapeError, "unexpected verdict #{verdict[0].inspect}"
         end
       end
 
