@@ -8,11 +8,21 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+        ruby: ["3.4", "4.0"]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: ruby/setup-ruby@v1
+      - uses: oxidize-rb/actions/setup-ruby-and-rust@v1
         with:
-          ruby-version: "3.4"
+          ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
+          cargo-cache: true
+      - run: cargo test --locked -p honeymaker
+      - run: bundle exec rake compile
       - run: bundle exec rake test
+        env:
+          HONEYMAKER_REQUIRE_NATIVE: "1"
