@@ -7,6 +7,7 @@ module Honeymaker
   module Clients
     class Kraken < Client
       URL = "https://api.kraken.com"
+      UNREADABLE = "Kraken: unreadable response"
 
       RATE_LIMITS = { default: 1000, orders: 1000 }.freeze
 
@@ -23,6 +24,7 @@ module Honeymaker
           txid: txid, consolidate_taker: consolidate_taker
         })
         return result if result.failure?
+        return unreadable unless result.data.is_a?(Hash)
 
         errors = result.data["error"]
         return Result::Failure.new(*errors) if errors.is_a?(Array) && errors.any?
@@ -53,6 +55,7 @@ module Honeymaker
           "deadline" => deadline, "validate" => validate
         })
         return result if result.failure?
+        return unreadable unless result.data.is_a?(Hash)
 
         errors = result.data["error"]
         return Result::Failure.new(*errors) if errors.is_a?(Array) && errors.any?
@@ -96,6 +99,7 @@ module Honeymaker
       def get_balances
         result = get_extended_balance
         return result if result.failure?
+        return unreadable unless result.data.is_a?(Hash)
 
         errors = result.data["error"]
         return Result::Failure.new(*errors) if errors.is_a?(Array) && errors.any?
@@ -149,6 +153,7 @@ module Honeymaker
         loop do
           result = get_trades_history(start: start, ofs: offset)
           return result if result.failure?
+          return unreadable unless result.data.is_a?(Hash)
 
           errors = result.data["error"]
           return Result::Failure.new(*errors) if errors.is_a?(Array) && errors.any?
@@ -195,6 +200,12 @@ module Honeymaker
       end
 
       private
+
+      # A 2xx body that isn't a JSON object (a maintenance page, "null"): the venue's answer is
+      # unknown, which is not the same as empty. Callers treat data[:unreadable] as ambiguous.
+      def unreadable
+        Result::Failure.new(UNREADABLE, data: { unreadable: true })
+      end
 
       def aggregate_trades(trades)
         first = trades.first

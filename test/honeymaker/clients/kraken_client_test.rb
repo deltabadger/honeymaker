@@ -15,6 +15,18 @@ class Honeymaker::Clients::KrakenTest < Minitest::Test
     assert_equal "https://api.kraken.com", Honeymaker::Clients::Kraken::URL
   end
 
+  def test_non_object_2xx_is_unreadable_not_empty
+    [["<html>maintenance</html>", ->(c) { c.get_balances }],
+     [nil, ->(c) { c.query_orders_info(txid: "O1") }],
+     ["oops", ->(c) { c.add_order(ordertype: "market", type: "buy", volume: "1", pair: "XBTUSD") }],
+     ["oops", ->(c) { c.closed_orders_from_trades(order_ids: ["O1"]) }]].each do |body, call|
+      stub_connection(:post, body)
+      r = call.call(@client)
+      assert_equal ["Kraken: unreadable response"], r.errors
+      assert_equal({ unreadable: true }, r.data)
+    end
+  end
+
   def test_get_tradable_asset_pairs
     stub_connection(:get, { "error" => [], "result" => { "XBTUSDT" => { "altname" => "XBTUSDT" } } })
     result = @client.get_tradable_asset_pairs
