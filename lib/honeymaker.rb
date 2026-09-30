@@ -38,13 +38,18 @@ require_relative "honeymaker/exchanges/hyperliquid"
 require_relative "honeymaker/exchanges/bingx"
 require_relative "honeymaker/exchanges/bitrue"
 
+if Honeymaker::Native.enabled?("kraken")
+  Honeymaker::Native.load! # fail at boot, not at the first order
+  require_relative "honeymaker/native/kraken"
+end
+
 module Honeymaker
   class Error < StandardError; end
 
   EXCHANGES = {
     "binance" => Exchanges::Binance,
     "binance_us" => Exchanges::BinanceUs,
-    "kraken" => Exchanges::Kraken,
+    "kraken" => Native.enabled?("kraken") ? Native::KrakenExchange : Exchanges::Kraken,
     "coinbase" => Exchanges::Coinbase,
     "mexc" => Exchanges::Mexc,
     "gemini" => Exchanges::Gemini,
@@ -60,7 +65,7 @@ module Honeymaker
   CLIENTS = {
     "binance" => Clients::Binance,
     "binance_us" => Clients::BinanceUs,
-    "kraken" => Clients::Kraken,
+    "kraken" => Native.enabled?("kraken") ? Native::KrakenClient : Clients::Kraken,
     "coinbase" => Clients::Coinbase,
     "bybit" => Clients::Bybit,
     "mexc" => Clients::Mexc,
@@ -73,6 +78,10 @@ module Honeymaker
     "hyperliquid" => Clients::Hyperliquid,
     "kraken_futures" => Clients::KrakenFutures
   }.freeze
+
+  def self.backend(name)
+    Native.enabled?(name) ? :native : :ruby
+  end
 
   def self.exchange(name)
     klass = EXCHANGES[name.to_s]
