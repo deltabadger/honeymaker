@@ -1,0 +1,16 @@
+[package]
+name = "honeymaker_native" # rb-sys finds the extension by this package name
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+name = "honeymaker_native" # Init_honeymaker_native, loaded as honeymaker/honeymaker_native
+crate-type = ["cdylib"]
+
+[dependencies]
+honeymaker-core = { package = "honeymaker", path = "../../crates/honeymaker" }
+magnus = "0.9"
+serde_json = { version = "1", features = ["preserve_order", "arbitrary_precision"] }
