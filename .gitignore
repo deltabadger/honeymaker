@@ -10,3 +10,9 @@
 
 # Internal planning docs — MUST NOT be committed to this public repo.
 /docs/
+
+/target/
+/lib/honeymaker/*.bundle
+/lib/honeymaker/*.so
+/lib/honeymaker/*.dll
+/lib/honeymaker/[0-9]*.[0-9]*/

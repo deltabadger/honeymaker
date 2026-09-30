@@ -13,7 +13,7 @@ Gem::Specification.new do |spec|
                      "balances, and orders. Supports Binance, Kraken, Coinbase, Bybit, KuCoin, Bitget, MEXC, and more."
   spec.homepage = "https://github.com/deltabadger/honeymaker"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.2.0"
+  spec.required_ruby_version = ">= 3.4.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = spec.homepage
@@ -22,16 +22,18 @@ Gem::Specification.new do |spec|
   spec.files = IO.popen(%w[git ls-files -z], chdir: __dir__, err: IO::NULL) do |ls|
     ls.readlines("\x0", chomp: true).reject do |f|
       (f == gemspec) ||
-        f.start_with?(*%w[bin/ Gemfile .gitignore])
+        f.start_with?(*%w[bin/ Gemfile .gitignore target/ docs/])
     end
   end
   spec.bindir = "exe"
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
+  spec.extensions = ["ext/honeymaker_native/extconf.rb"]
 
   spec.add_dependency "faraday", "~> 2.0"
   spec.add_dependency "faraday-net_http_persistent", "~> 2.0"
   spec.add_dependency "net-http-persistent", "~> 4.0"
   spec.add_dependency "jwt", "~> 2.0"
   spec.add_dependency "bigdecimal"
+  spec.add_dependency "rb_sys", "~> 0.9.130"
 end

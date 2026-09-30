@@ -3,13 +3,26 @@
 require "bundler/gem_tasks"
 require "rake/testtask"
 
+if File.exist?(File.join(__dir__, "honeymaker.gemspec"))
+  require "rb_sys/extensiontask"
+
+  GEMSPEC = Gem::Specification.load(File.join(__dir__, "honeymaker.gemspec"))
+  RbSys::ExtensionTask.new("honeymaker_native", GEMSPEC) do |ext|
+    ext.lib_dir = "lib/honeymaker"
+    # Core-only edits must rebuild the extension too (the default pattern covers ext/ only).
+    ext.source_pattern = "{**/*,../../crates/honeymaker/**/*,../../Cargo}.{rs,toml,lock}"
+    ext.cross_compile = true
+    ext.cross_platform = %w[x86_64-linux aarch64-linux x86_64-darwin arm64-darwin x64-mingw-ucrt]
+  end
+end
+
 Rake::TestTask.new(:test) do |t|
   t.libs << "test"
   t.libs << "lib"
   t.test_files = FileList["test/**/*_test.rb"]
 end
 
-task default: :test
+task default: %i[compile test]
 
 VERSION_FILE = "lib/honeymaker/version.rb"
 
