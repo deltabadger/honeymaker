@@ -42,7 +42,6 @@ pub(crate) fn verdict<T>(
         }
         Finished::Venue => out.push(ruby.str_new("venue"))?,
         Finished::Unreadable => out.push(ruby.str_new("unreadable"))?,
-        Finished::Invalid => out.push(ruby.str_new("invalid"))?,
     }
     Ok(out)
 }
@@ -202,6 +201,60 @@ impl Kraken {
                 normalize::add_order::<RubyDecimal>(&json).map_err(|e| norm(ruby, e))?,
                 |id| convert::from_json(ruby, &id),
             ),
+            "tickers_info" => verdict(
+                ruby,
+                normalize::tickers(&json).map_err(|m| convert::shape(ruby, &m))?,
+                |list| {
+                    let out = ruby.ary_new();
+                    for t in list {
+                        let h = ruby.hash_new();
+                        let opt_str = |s: &Option<String>| {
+                            s.as_deref()
+                                .map(|x| ruby.str_new(x).as_value())
+                                .unwrap_or_else(|| ruby.qnil().as_value())
+                        };
+                        h.aset(sym("ticker"), convert::from_json(ruby, &t.ticker)?)?;
+                        h.aset(sym("base"), opt_str(&t.base))?;
+                        h.aset(sym("quote"), opt_str(&t.quote))?;
+                        h.aset(
+                            sym("minimum_base_size"),
+                            convert::from_json(ruby, &t.minimum_base_size)?,
+                        )?;
+                        h.aset(
+                            sym("minimum_quote_size"),
+                            convert::from_json(ruby, &t.minimum_quote_size)?,
+                        )?;
+                        h.aset(sym("maximum_base_size"), ruby.qnil())?;
+                        h.aset(sym("maximum_quote_size"), ruby.qnil())?;
+                        h.aset(
+                            sym("base_decimals"),
+                            convert::from_json(ruby, &t.base_decimals)?,
+                        )?;
+                        h.aset(
+                            sym("quote_decimals"),
+                            convert::from_json(ruby, &t.quote_decimals)?,
+                        )?;
+                        h.aset(
+                            sym("price_decimals"),
+                            convert::from_json(ruby, &t.price_decimals)?,
+                        )?;
+                        h.aset(sym("available"), ruby.qtrue())?;
+                        h.aset(sym("trading_enabled"), t.trading_enabled)?;
+                        out.push(h)?;
+                    }
+                    Ok(out.as_value())
+                },
+            ),
+            "bid_ask" => verdict(
+                ruby,
+                normalize::bid_ask::<RubyDecimal>(&json).map_err(|e| norm(ruby, e))?,
+                |(bid, ask)| {
+                    let h = ruby.hash_new();
+                    h.aset(sym("bid"), bid.value())?;
+                    h.aset(sym("ask"), ask.value())?;
+                    Ok(h.as_value())
+                },
+            ),
             other => Err(convert::shape(ruby, &format!("unknown finish op {other}"))),
         }
     }
@@ -257,6 +310,20 @@ impl Kraken {
         Ok(out)
     }
 
+    fn classify_error(ruby: &Ruby, message: String) -> Result<Value, magnus::Error> {
+        Ok(match normalize::classify_error(&message) {
+            None => ruby.qnil().as_value(),
+            Some((code, caps)) => {
+                let h = ruby.hash_new();
+                h.aset(sym("code"), sym(code))?;
+                for (k, v) in caps {
+                    h.aset(sym(k), ruby.str_new(&v))?;
+                }
+                h.as_value()
+            }
+        })
+    }
+
     fn set_fixed_nonce(n: Option<u64>) {
         sign::set_fixed_nonce(n);
     }
@@ -272,6 +339,10 @@ pub fn define(ruby: &Ruby, ext: magnus::RModule) -> Result<(), magnus::Error> {
     c.define_method("build_post", magnus::method!(Kraken::build_post, 2))?;
     c.define_method("sign", magnus::method!(Kraken::sign, 2))?;
     c.define_method("build_get", magnus::method!(Kraken::build_get, 2))?;
+    c.define_singleton_method(
+        "classify_error",
+        magnus::function!(Kraken::classify_error, 1),
+    )?;
     c.define_method("finish", magnus::method!(Kraken::finish, 2))?;
     c.define_singleton_method(
         "aggregate_trades",
