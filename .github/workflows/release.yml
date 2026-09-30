@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  gems:
+    uses: ./.github/workflows/native-gems.yml
+
+  publish:
+    needs: gems
+    runs-on: ubuntu-latest
+    environment: rubygems # required reviewer: Jan
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4 # FIRST: checkout cleans the workspace, so it must not run after the download
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gem-*
+          merge-multiple: true
+          path: gems
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+      - uses: rubygems/configure-rubygems-credentials@v1.0.0
+        with:
+          trusted-publisher: true
+      - name: Push platform gems first, the source gem last (idempotent)
+        run: script/release/push_gems.sh gems "${GITHUB_REF_NAME#v}"

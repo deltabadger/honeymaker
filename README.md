@@ -16,6 +16,45 @@ Binance, Binance US, Kraken, Kraken Futures, Coinbase, Bybit, KuCoin, Bitget, ME
 gem "honeymaker"
 ```
 
+## Native extension
+
+Prebuilt native gems support Ruby 3.4 and 4.0 on `x86_64-linux`, `aarch64-linux`,
+`x86_64-darwin`, `arm64-darwin`, and `x64-mingw-ucrt`. A source gem is also published.
+Building from source needs Rust 1.94; in a checkout, run `bundle install` followed by
+`bundle exec rake compile`.
+
+The Ruby backend remains the default. Set `HONEYMAKER_NATIVE=kraken` before requiring
+`honeymaker` to enable the Rust backend for Kraken. `HONEYMAKER_NATIVE` accepts a
+comma-separated list of exchange names; Kraken is currently the supported native backend.
+Other exchanges continue to use Ruby. Unset the variable to return to the Ruby backend.
+
+### Releases
+
+Run `bundle exec rake release` for a patch release, `bundle exec rake release:minor`
+for a minor release, or `bundle exec rake release:major` for a major release. The task
+bumps the gem and Cargo workspace versions together, updates both lockfiles, compiles,
+tests, commits the four version/lock files, and pushes the commit and a `v<version>` tag.
+`bundle exec rake _tag_release` resumes the push without another version bump.
+
+The tag triggers `.github/workflows/release.yml`, which calls the native-gem workflow
+to build and smoke-test all five platform gems and the source gem. Configure the
+GitHub `rubygems` environment with Jan as its required reviewer and configure RubyGems
+trusted publishing for this repository's `release.yml` workflow and `rubygems` environment.
+After Jan approves, CI publishes using trusted publishing, with platform gems first
+and the source gem last.
+
+Recovery:
+
+- **Publish failed partway:** open Actions → the same workflow run → **Re-run failed jobs**.
+  The artifacts are retained, and the push loop skips gems already published with an
+  identical checksum. It stops on any mismatch; never override that.
+- **Workflow cancelled or never finished building:** choose **Re-run all jobs** on the
+  tag's run. `gh workflow run` is not a substitute, because it isn't a tag-push event.
+- **Bump commit pushed but tag push failed:** run
+  `git tag -a v<version> -m v<version> && git push origin v<version>`.
+  `_tag_release` is a no-op once the tag exists locally. If the tag already exists locally,
+  retry just `git push origin v<version>`.
+
 ## Usage
 
 ### Market Data

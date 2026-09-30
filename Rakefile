@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require "bundler/gem_tasks"
 require "rake/testtask"
 
-if File.exist?(File.join(__dir__, "honeymaker.gemspec"))
+if ENV["HONEYMAKER_RAKEFILE_LIB_ONLY"] != "1" && File.exist?(File.join(__dir__, "honeymaker.gemspec"))
+  require "bundler/gem_tasks"
   require "rb_sys/extensiontask"
 
   GEMSPEC = Gem::Specification.load(File.join(__dir__, "honeymaker.gemspec"))
@@ -39,40 +39,39 @@ def bump_version(segment)
   end.join(".")
   content = File.read(VERSION_FILE)
   File.write(VERSION_FILE, content.sub(/VERSION = ".+"/, "VERSION = \"#{new_version}\""))
+  File.write("Cargo.toml", File.read("Cargo.toml").sub(/(\[workspace\.package\][^\[]*?^version = )"[^"]+"/m, "\\1\"#{new_version}\""))
   puts "Bumped version to #{new_version}"
 end
 
-# Bundler's `release` task is defined when this Rakefile loads — it captures
-# the gemspec version at that moment in `Bundler::GemHelper`. If we bump the
-# version mid-run (as a build prerequisite), the gem is published correctly
-# but the final "Pushed <gem> <ver>" log line still prints the old cached
-# version. Fix: bump first, then invoke bundler's release in a subprocess so
-# it re-reads the gemspec fresh.
-
-Rake::Task[:release].clear
+if ENV["HONEYMAKER_RAKEFILE_LIB_ONLY"] != "1" && File.exist?(File.join(__dir__, "honeymaker.gemspec"))
+  Rake::Task[:release].clear
+end
 
 def do_release(segment)
   bump_version(segment)
   sh "bundle install"
+  sh "cargo update --workspace --offline"
+  Rake::Task[:compile].invoke
   Rake::Task[:test].invoke
-  sh %(git add -A && git diff --cached --quiet || git commit -m "v#{current_version}")
-  sh "bundle exec rake _bundler_release"
+  sh %(git add #{VERSION_FILE} Cargo.toml Cargo.lock Gemfile.lock && git commit -m "v#{current_version}")
+  sh "bundle exec rake _tag_release"
 end
 
-task _bundler_release: %w[build release:guard_clean release:source_control_push release:rubygem_push]
+# Pushes the bump commit and the v* tag; .github/workflows/release.yml builds and publishes.
+task _tag_release: %w[release:guard_clean release:source_control_push]
 
-desc "Bump patch, run tests, push to rubygems"
+desc "Bump patch, compile, test, and push a release tag for CI"
 task :release do
   do_release(:patch)
 end
 
 namespace :release do
-  desc "Bump minor, run tests, push to rubygems"
+  desc "Bump minor, compile, test, and push a release tag for CI"
   task :minor do
     do_release(:minor)
   end
 
-  desc "Bump major, run tests, push to rubygems"
+  desc "Bump major, compile, test, and push a release tag for CI"
   task :major do
     do_release(:major)
   end
