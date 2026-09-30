@@ -1,0 +1,146 @@
+[
+  {
+    "input": "0.5",
+    "ok": true,
+    "finite": true,
+    "plain": "0.5",
+    "sign": 2
+  },
+  {
+    "input": "1",
+    "ok": true,
+    "finite": true,
+    "plain": "1.0",
+    "sign": 2
+  },
+  {
+    "input": "-0",
+    "ok": true,
+    "finite": true,
+    "plain": "-0.0",
+    "sign": -1
+  },
+  {
+    "input": "-0.0000",
+    "ok": true,
+    "finite": true,
+    "plain": "-0.0",
+    "sign": -1
+  },
+  {
+    "input": "0.0000000001",
+    "ok": true,
+    "finite": true,
+    "plain": "0.0000000001",
+    "sign": 2
+  },
+  {
+    "input": "123456789012345678901234567890.123456789",
+    "ok": true,
+    "finite": true,
+    "plain": "123456789012345678901234567890.123456789",
+    "sign": 2
+  },
+  {
+    "input": "1e-9",
+    "ok": true,
+    "finite": true,
+    "plain": "0.000000001",
+    "sign": 2
+  },
+  {
+    "input": "1E5",
+    "ok": true,
+    "finite": true,
+    "plain": "100000.0",
+    "sign": 2
+  },
+  {
+    "input": " 1.5 ",
+    "ok": true,
+    "finite": true,
+    "plain": "1.5",
+    "sign": 2
+  },
+  {
+    "input": "1_000.5",
+    "ok": true,
+    "finite": true,
+    "plain": "1000.5",
+    "sign": 2
+  },
+  {
+    "input": ".5",
+    "ok": true,
+    "finite": true,
+    "plain": "0.5",
+    "sign": 2
+  },
+  {
+    "input": "5.",
+    "ok": true,
+    "finite": true,
+    "plain": "5.0",
+    "sign": 2
+  },
+  {
+    "input": "+2",
+    "ok": true,
+    "finite": true,
+    "plain": "2.0",
+    "sign": 2
+  },
+  {
+    "input": "",
+    "ok": false,
+    "error": "invalid value for BigDecimal(): \"\""
+  },
+  {
+    "input": "abc",
+    "ok": false,
+    "error": "invalid value for BigDecimal(): \"abc\""
+  },
+  {
+    "input": "1,5",
+    "ok": false,
+    "error": "invalid value for BigDecimal(): \"1,5\""
+  },
+  {
+    "input": "0x10",
+    "ok": false,
+    "error": "invalid value for BigDecimal(): \"0x10\""
+  },
+  {
+    "input": "NaN",
+    "ok": true,
+    "finite": false,
+    "plain": "NaN",
+    "sign": 0
+  },
+  {
+    "input": "Infinity",
+    "ok": true,
+    "finite": false,
+    "plain": "Infinity",
+    "sign": 3
+  },
+  {
+    "input": "-Infinity",
+    "ok": true,
+    "finite": false,
+    "plain": "-Infinity",
+    "sign": -3
+  },
+  {
+    "input": "1d2",
+    "ok": true,
+    "finite": true,
+    "plain": "100.0",
+    "sign": 2
+  },
+  {
+    "input": "true",
+    "ok": false,
+    "error": "invalid value for BigDecimal(): \"true\""
+  }
+]

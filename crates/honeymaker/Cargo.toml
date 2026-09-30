@@ -9,6 +9,10 @@ repository.workspace = true
 publish = false # until deltabadger-rs consumes it (spec §2.6)
 
 [dependencies]
+base64 = "0.22"
 bigdecimal = "0.4"
+hmac = "0.12"
+regex = "1"
 serde_json = { version = "1", features = ["preserve_order", "arbitrary_precision"] }
+sha2 = "0.10"
 thiserror = "2"
