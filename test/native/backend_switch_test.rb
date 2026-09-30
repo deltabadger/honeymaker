@@ -21,6 +21,24 @@ class Honeymaker::Native::BackendSwitchTest < Minitest::Test
     assert_equal "Honeymaker::Clients::Kraken,Honeymaker::Exchanges::Kraken,ruby,0", out
   end
 
+  def test_unsupported_flags_fail_at_require_time
+    ["binance", " kraken, ,binance ", " KRAKEN, bybit "].each do |flag|
+      out, st = ruby({ "HONEYMAKER_NATIVE" => flag }, 'require "honeymaker"')
+      refute st.success?, out
+      assert_match(/unsupported.*(?:binance|bybit)/i, out)
+      assert_match(/supported.*kraken/i, out)
+    end
+  end
+
+  def test_backend_only_reports_supported_enabled_names
+    out, st = ruby({ "HONEYMAKER_NATIVE" => " KRAKEN, ,kraken " }, <<~RUBY)
+      require "honeymaker"
+      print [Honeymaker.backend(" KRAKEN "), Honeymaker.backend(:binance), Honeymaker.backend("unknown")].join(",")
+    RUBY
+    assert st.success?, out
+    assert_equal "native,ruby,ruby", out
+  end
+
   def test_flag_on_selects_native_for_kraken_only
     skip "native extension not compiled" unless Dir[File.join(LIB, "honeymaker", "**", "honeymaker_native.{so,bundle,dll}")].any?
 

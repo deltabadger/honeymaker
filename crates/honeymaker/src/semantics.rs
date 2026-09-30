@@ -26,35 +26,75 @@ pub fn truthy(v: Option<&Value>) -> bool {
     !matches!(v, None | Some(Value::Null) | Some(Value::Bool(false)))
 }
 
-/// `s.split(sep).first`: Ruby drops trailing empty fields, so "" and "..." give nil.
-pub fn split_first(s: &str, sep: char) -> Option<&str> {
-    if s.split(sep).all(str::is_empty) {
-        None
-    } else {
-        s.split(sep).next()
-    }
+/// Lossless Ruby String: [bytes, Encoding#name]. Never interpret this object as a Hash.
+pub const RUBY_STRING: &str = "\u{0}ruby_string";
+
+pub fn is_string(v: &Value) -> bool {
+    v.is_string()
+        || v.as_object()
+            .is_some_and(|m| m.len() == 1 && m.contains_key(RUBY_STRING))
 }
 
-/// `x.to_i` for JSON values: Integer as is, Float truncated, String's leading integer, else 0.
-pub fn to_i(v: &Value) -> i64 {
-    match v {
-        Value::Number(n) => n
-            .as_i64()
-            .or_else(|| n.as_f64().map(|f| f.trunc() as i64))
-            .unwrap_or(0),
-        Value::String(s) => {
-            let t = s.trim_start();
-            let (sign, digits) = match t.strip_prefix('-') {
-                Some(r) => (-1, r),
-                None => (1, t.strip_prefix('+').unwrap_or(t)),
-            };
-            sign * digits
-                .chars()
-                .take_while(char::is_ascii_digit)
-                .collect::<String>()
-                .parse::<i64>()
-                .unwrap_or(0)
+/// String operations whose encoding semantics belong to the embedding runtime.
+pub enum StringOp<'a> {
+    Index(&'a str),
+    Split(&'a str),
+    DowncaseSymbol,
+    Symbol,
+    First,
+}
+
+pub fn string_op(v: &Value, op: StringOp<'_>) -> Result<Value, String> {
+    let s = v.as_str().ok_or("expected a UTF-8 string")?;
+    Ok(match op {
+        StringOp::Index(key) => {
+            if s.contains(key) {
+                Value::from(key)
+            } else {
+                Value::Null
+            }
         }
-        _ => 0,
+        StringOp::Split(sep) => {
+            let mut parts: Vec<Value> = s.split(sep).map(Value::from).collect();
+            while parts.last().is_some_and(|v| v.as_str() == Some("")) {
+                parts.pop();
+            }
+            Value::Array(parts)
+        }
+        StringOp::DowncaseSymbol => {
+            Value::from(s.chars().flat_map(char::to_lowercase).collect::<String>())
+        }
+        StringOp::Symbol => v.clone(),
+        StringOp::First => s
+            .chars()
+            .next()
+            .map(|c| Value::from(c.to_string()))
+            .unwrap_or(Value::Null),
+    })
+}
+
+/// Equality to an ASCII venue token, including ASCII-compatible binary strings.
+pub fn string_eq(v: &Value, token: &str) -> bool {
+    if let Some(s) = v.as_str() {
+        return s == token;
     }
+    v.get(RUBY_STRING)
+        .and_then(Value::as_array)
+        .is_some_and(|parts| {
+            parts[0].as_array().is_some_and(|bytes| {
+                bytes.len() == token.len()
+                    && bytes
+                        .iter()
+                        .zip(token.bytes())
+                        .all(|(v, b)| v.as_u64() == Some(b as u64))
+            })
+        })
+}
+
+/// Escape keys that serde_json cannot represent directly, including literal escape prefixes.
+pub const RUBY_KEY: &str = "\u{0}ruby_key:";
+pub fn object_key(key: &str) -> Value {
+    key.strip_prefix(RUBY_KEY)
+        .and_then(|s| serde_json::from_str(s).ok())
+        .unwrap_or_else(|| Value::from(key))
 }

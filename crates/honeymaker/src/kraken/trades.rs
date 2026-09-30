@@ -4,7 +4,7 @@ use crate::num::{NormError, Num};
 use serde_json::Value;
 
 pub struct TradeAggregate<D> {
-    pub side: Option<String>, // first["type"]&.to_sym (not downcased)
+    pub side: Option<Value>, // first["type"]&.to_sym (not downcased)
     pub order_type: OrderType,
     pub vol: D,
     pub cost: D,
@@ -32,7 +32,9 @@ pub fn aggregate<D: Num>(trades: &[Value]) -> Result<TradeAggregate<D>, NormErro
     };
     let side = match first.get("type") {
         None | Some(Value::Null) => None,
-        Some(Value::String(s)) => Some(s.clone()),
+        Some(v) if crate::semantics::is_string(v) => {
+            Some(D::string_op(v, crate::semantics::StringOp::Symbol).map_err(NormError::Num)?)
+        }
         Some(other) => return Err(format!("type.to_sym: {other}").into()), // false/1 have no to_sym
     };
     Ok(TradeAggregate {

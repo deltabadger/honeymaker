@@ -33,8 +33,10 @@ impl Num for RubyDecimal {
     fn parse_to_s(v: &serde_json::Value) -> Result<Self, magnus::Error> {
         let ruby = Self::ruby();
         let obj = BoxValue::new(crate::convert::from_json(&ruby, v)?);
-        let text: String = obj.funcall("to_s", ())?;
-        Self::parse(&text)
+        let text = BoxValue::new(obj.funcall::<_, _, Value>("to_s", ())?);
+        Ok(Self::wrap(
+            ruby.module_kernel().funcall("BigDecimal", (*text,))?,
+        ))
     }
 
     fn parse_json(v: &serde_json::Value) -> Result<Self, magnus::Error> {
@@ -43,6 +45,31 @@ impl Num for RubyDecimal {
         Ok(Self::wrap(
             ruby.module_kernel().funcall("BigDecimal", (*obj,))?,
         ))
+    }
+
+    fn string_op(
+        v: &serde_json::Value,
+        op: honeymaker_core::semantics::StringOp<'_>,
+    ) -> Result<serde_json::Value, magnus::Error> {
+        use honeymaker_core::semantics::StringOp;
+        let ruby = Self::ruby();
+        let obj = BoxValue::new(crate::convert::from_json(&ruby, v)?);
+        let result: Value = match op {
+            StringOp::Index(key) => obj.funcall("[]", (key,))?,
+            StringOp::Split(sep) => obj.funcall("split", (sep,))?,
+            StringOp::First => obj.funcall("[]", (0,))?,
+            StringOp::DowncaseSymbol | StringOp::Symbol => {
+                let text = BoxValue::new(if matches!(op, StringOp::DowncaseSymbol) {
+                    obj.funcall("downcase", ())?
+                } else {
+                    *obj
+                });
+                // Validate now, in legacy's evaluation order, before parsing decimals.
+                text.funcall::<_, _, Value>("to_sym", ())?;
+                *text
+            }
+        };
+        crate::convert::to_json(&ruby, result)
     }
 
     fn add(&self, o: &Self) -> Result<Self, magnus::Error> {

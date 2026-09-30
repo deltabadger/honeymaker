@@ -18,3 +18,7 @@ body = URI.encode_www_form(pairs)
 headers = ext.sign(path, body)
 abort "bad build #{path} #{body} #{headers.keys}" unless path == "/0/private/BalanceEx" && body.start_with?("nonce=") && headers["API-Sign"]
 puts "smoke kraken ok"
+
+require_relative "support/kraken_signing_smoke"
+KrakenSigningSmoke.verify!
+puts "smoke kraken signing vector ok"

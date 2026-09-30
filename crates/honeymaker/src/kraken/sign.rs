@@ -89,3 +89,68 @@ pub fn private_headers(
         ("User-Agent".into(), "Honeymaker Ruby".into()),
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // FIXED affects every key, so all nonce tests hold this guard until both stores are reset.
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+    struct NonceState {
+        _guard: std::sync::MutexGuard<'static, ()>,
+    }
+    impl NonceState {
+        fn new() -> Self {
+            let guard = TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+            set_fixed_nonce(None);
+            reset_nonces();
+            Self { _guard: guard }
+        }
+    }
+    impl Drop for NonceState {
+        fn drop(&mut self) {
+            set_fixed_nonce(None);
+            reset_nonces();
+        }
+    }
+
+    #[test]
+    fn ten_thousand_nonces_are_strictly_increasing() {
+        let _state = NonceState::new();
+        let mut last = next_nonce(Some("monotonic"));
+        for _ in 1..10_000 {
+            let next = next_nonce(Some("monotonic"));
+            assert!(next > last, "{next} <= {last}");
+            last = next;
+        }
+    }
+
+    #[test]
+    fn keys_have_independent_nonce_sequences() {
+        let _state = NonceState::new();
+        let future = u64::MAX - 10_000;
+        let key: [u8; 32] = Sha256::digest(b"key-a").into();
+        NONCES
+            .lock()
+            .unwrap()
+            .get_or_insert_with(HashMap::new)
+            .insert(key, future);
+        assert_eq!(next_nonce(Some("key-a")), future + 1);
+        let b = next_nonce(Some("key-b"));
+        assert!(b < future, "key-a must not advance key-b");
+        assert_eq!(next_nonce(Some("key-a")), future + 2);
+        assert!(next_nonce(Some("key-b")) > b);
+    }
+
+    #[test]
+    fn fixed_nonce_is_returned_until_cleared() {
+        let _state = NonceState::new();
+        set_fixed_nonce(Some(42));
+        for key in [Some("key-a"), Some("key-b"), None] {
+            assert_eq!(next_nonce(key), 42);
+            assert_eq!(next_nonce(key), 42);
+        }
+        set_fixed_nonce(None);
+        assert!(next_nonce(Some("key-a")) > 42);
+    }
+}

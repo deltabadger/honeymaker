@@ -15,6 +15,10 @@ pub trait Num: Sized {
     /// Legacy `BigDecimal(value)` on the parsed JSON object itself (no `to_s`): Integers and
     /// Strings convert, a Float raises ("can't omit precision for a Float."), others raise.
     fn parse_json(v: &serde_json::Value) -> Result<Self, Self::Error>;
+    fn string_op(
+        v: &serde_json::Value,
+        op: crate::semantics::StringOp<'_>,
+    ) -> Result<serde_json::Value, Self::Error>;
     fn add(&self, other: &Self) -> Result<Self, Self::Error>;
     fn sub(&self, other: &Self) -> Result<Self, Self::Error>;
     fn div(&self, other: &Self) -> Result<Self, Self::Error>;
@@ -86,6 +90,12 @@ impl Num for BigDecimal {
             serde_json::Value::Number(_) => Err("can't omit precision for a Float.".into()),
             other => Err(format!("can't convert {other} into BigDecimal")),
         }
+    }
+    fn string_op(
+        v: &serde_json::Value,
+        op: crate::semantics::StringOp<'_>,
+    ) -> Result<serde_json::Value, String> {
+        crate::semantics::string_op(v, op)
     }
     fn add(&self, o: &Self) -> Result<Self, String> {
         Ok(self + o)

@@ -1,6 +1,6 @@
 use crate::num::{NormError, Num};
-use crate::semantics::{split_first, truthy};
-use crate::{OrderStatus, OrderType, Side};
+use crate::semantics::{StringOp, is_string, object_key, string_eq, truthy};
+use crate::{OrderStatus, OrderType};
 use serde_json::{Map, Value};
 use std::borrow::Cow;
 
@@ -58,10 +58,8 @@ macro_rules! envelope_or_return {
 fn result_entries(obj: &Map<String, Value>) -> Result<Vec<(Value, &Value)>, String> {
     match obj.get("result") {
         v if !truthy(v) => Ok(Vec::new()),
-        Some(Value::Object(m)) => Ok(m
-            .iter()
-            .map(|(k, v)| (Value::String(k.clone()), v))
-            .collect()),
+        Some(v) if is_string(v) => Err(format!("result is not an object: {v}")),
+        Some(Value::Object(m)) => Ok(m.iter().map(|(k, v)| (object_key(k), v)).collect()),
         Some(Value::Array(a)) => Ok(a
             .iter()
             .map(|entry| match entry {
@@ -79,24 +77,28 @@ fn result_entries(obj: &Map<String, Value>) -> Result<Vec<(Value, &Value)>, Stri
 
 /// Legacy string-key indexing accepts both Hash and String. String#[] returns
 /// the requested substring when present, otherwise nil; other shapes raise.
-fn string_fields<'a>(
+fn string_fields<'a, D: Num>(
     value: &'a Value,
     keys: &[&str],
-) -> Result<Cow<'a, Map<String, Value>>, String> {
+) -> Result<Cow<'a, Map<String, Value>>, NormError<D::Error>> {
+    if is_string(value) {
+        let mut fields = Map::new();
+        for key in keys {
+            let found = D::string_op(value, StringOp::Index(key)).map_err(NormError::Num)?;
+            if !found.is_null() {
+                fields.insert(key.to_string(), found);
+            }
+        }
+        return Ok(Cow::Owned(fields));
+    }
     match value {
         Value::Object(m) => Ok(Cow::Borrowed(m)),
-        Value::String(s) => Ok(Cow::Owned(
-            keys.iter()
-                .filter(|key| s.contains(**key))
-                .map(|key| (key.to_string(), Value::String(key.to_string())))
-                .collect(),
-        )),
-        other => Err(format!("cannot index with a String: {other}")),
+        other => Err(format!("cannot index with a String: {other}").into()),
     }
 }
 
 pub struct KrakenBalance<D> {
-    pub asset: Option<String>,
+    pub asset: Value,
     pub free: D,
     pub locked: D,
 }
@@ -105,18 +107,17 @@ pub fn balances<D: Num>(data: &Value) -> R<Vec<KrakenBalance<D>>, D> {
     let obj = envelope_or_return!(data);
     let mut out: Vec<KrakenBalance<D>> = Vec::new();
     for (symbol, balance) in result_entries(obj)? {
-        let symbol = symbol
-            .as_str()
-            .ok_or_else(|| format!("symbol.split: {symbol}"))?;
-        let first = split_first(symbol, '.');
-        let asset = first.map(|f| {
-            ASSET_MAP
-                .iter()
-                .find(|(k, _)| *k == f)
-                .map(|(_, v)| v.to_string())
-                .unwrap_or_else(|| f.to_string())
-        });
-        let bal = string_fields(balance, &["balance", "hold_trade"])?;
+        if !is_string(&symbol) {
+            return Err(format!("symbol.split: {symbol}").into());
+        }
+        let parts = D::string_op(&symbol, StringOp::Split(".")).map_err(NormError::Num)?;
+        let first = parts[0].clone();
+        let asset = ASSET_MAP
+            .iter()
+            .find(|(k, _)| string_eq(&first, k))
+            .map(|(_, v)| Value::from(*v))
+            .unwrap_or(first);
+        let bal = string_fields::<D>(balance, &["balance", "hold_trade"])?;
         let total: D = dec(bal.get("balance"))?;
         let hold = bal
             .get("hold_trade")
@@ -147,7 +148,7 @@ pub fn balances<D: Num>(data: &Value) -> R<Vec<KrakenBalance<D>>, D> {
 pub struct NormalizedOrder<D> {
     pub order_id: Value,
     pub status: OrderStatus,
-    pub side: Option<Side>,
+    pub side: Option<Value>,
     pub order_type: OrderType,
     pub price: Option<D>,
     pub amount: Option<D>,
@@ -157,18 +158,18 @@ pub struct NormalizedOrder<D> {
 }
 
 pub fn order_type(v: Option<&Value>) -> OrderType {
-    match v.and_then(Value::as_str) {
-        Some("market") => OrderType::Market,
-        Some("limit") => OrderType::Limit,
+    match v {
+        Some(v) if string_eq(v, "market") => OrderType::Market,
+        Some(v) if string_eq(v, "limit") => OrderType::Limit,
         _ => OrderType::Unknown,
     }
 }
 
 fn status(v: Option<&Value>) -> OrderStatus {
-    match v.and_then(Value::as_str) {
-        Some("open") => OrderStatus::Open,
-        Some("closed") => OrderStatus::Closed,
-        Some("canceled") | Some("expired") => OrderStatus::Cancelled,
+    match v {
+        Some(v) if string_eq(v, "open") => OrderStatus::Open,
+        Some(v) if string_eq(v, "closed") => OrderStatus::Closed,
+        Some(v) if string_eq(v, "canceled") || string_eq(v, "expired") => OrderStatus::Cancelled,
         _ => OrderStatus::Unknown,
     }
 }
@@ -178,7 +179,7 @@ pub fn orders<D: Num>(data: &Value) -> R<Vec<NormalizedOrder<D>>, D> {
     let empty = Map::new();
     let mut out = Vec::new();
     for (order_id, raw) in result_entries(obj)? {
-        let raw = string_fields(
+        let raw = string_fields::<D>(
             raw,
             &[
                 "descr", "status", "oflags", "vol", "vol_exec", "cost", "price",
@@ -186,21 +187,25 @@ pub fn orders<D: Num>(data: &Value) -> R<Vec<NormalizedOrder<D>>, D> {
         )?;
         let descr = match raw.get("descr") {
             v if !truthy(v) => Cow::Borrowed(&empty),
-            Some(value) => string_fields(value, &["ordertype", "type", "price"])?,
+            Some(value) => string_fields::<D>(value, &["ordertype", "type", "price"])?,
             None => Cow::Borrowed(&empty),
         };
         let order_type = order_type(descr.get("ordertype"));
         let side = match descr.get("type") {
             None | Some(Value::Null) => None,
-            // Ruby downcase does not apply contextual final-sigma mapping.
-            Some(Value::String(s)) => Some(Side::from_venue(
-                &s.chars().flat_map(char::to_lowercase).collect::<String>(),
-            )),
+            Some(v) if is_string(v) => {
+                Some(D::string_op(v, StringOp::DowncaseSymbol).map_err(NormError::Num)?)
+            }
             Some(other) => return Err(format!("descr.type: {other}").into()),
         };
         let viqc = match raw.get("oflags") {
             v if !truthy(v) => false,
-            Some(Value::String(s)) => s.split(',').any(|f| f == "viqc"),
+            Some(v) if is_string(v) => D::string_op(v, StringOp::Split(","))
+                .map_err(NormError::Num)?
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|f| string_eq(f, "viqc")),
             Some(other) => return Err(format!("oflags: {other}").into()),
             None => false,
         };
@@ -241,16 +246,18 @@ pub fn add_order<D: Num>(data: &Value) -> R<Value, D> {
     let obj = envelope_or_return!(data);
     let txid = match obj.get("result") {
         None | Some(Value::Null) => None,
+        Some(v) if is_string(v) => return Err(format!("result: {v}").into()),
         Some(Value::Object(m)) => m.get("txid").filter(|v| truthy(Some(v))).cloned(),
         Some(other) => return Err(format!("result: {other}").into()),
     };
     Ok(Finished::Ok(match txid {
         None => Value::Null,
         Some(Value::Array(a)) => a.first().cloned().unwrap_or(Value::Null),
+        Some(v) if is_string(&v) => return Err(format!("txid: {v}").into()),
         Some(Value::Object(m)) => m
             .into_iter()
             .next()
-            .map(|(k, v)| Value::Array(vec![Value::String(k), v]))
+            .map(|(k, v)| Value::Array(vec![object_key(&k), v]))
             .unwrap_or(Value::Null),
         Some(other) => return Err(format!("txid: {other}").into()),
     }))
@@ -258,8 +265,8 @@ pub fn add_order<D: Num>(data: &Value) -> R<Value, D> {
 
 pub struct Ticker {
     pub ticker: Value,
-    pub base: Option<String>,
-    pub quote: Option<String>,
+    pub base: Value,
+    pub quote: Value,
     pub minimum_base_size: Value,
     /// REAL_COSTMIN[quote] || costmin || 0 as a raw value; the wrapper applies Ruby's `.to_s`
     /// (Float#to_s gives "5.0e-05" for XBT, which is part of the contract).
@@ -290,7 +297,7 @@ const REAL_COSTMIN: &[(&str, &str)] = &[
     ("XBT", "0.00005"),
 ];
 
-pub fn tickers(data: &Value) -> Result<Finished<Vec<Ticker>>, String> {
+pub fn tickers<D: Num>(data: &Value) -> R<Vec<Ticker>, D> {
     let obj = data.as_object().ok_or("body is not an object")?;
     if let Some(Value::Array(e)) = obj.get("error")
         && e.iter().any(|x| truthy(Some(x)))
@@ -301,51 +308,51 @@ pub fn tickers(data: &Value) -> Result<Finished<Vec<Ticker>>, String> {
     if !matches!(obj.get("result"), Some(Value::Object(_) | Value::Array(_))) {
         return Err("result cannot be enumerated".into());
     }
-    let mut seen: Vec<(String, Cow<'_, Map<String, Value>>)> = Vec::new();
+    let mut seen: Vec<(Value, Cow<'_, Map<String, Value>>)> = Vec::new();
     for (_, raw) in result_entries(obj)? {
-        let info = string_fields(raw, &["wsname"])?;
+        let info = string_fields::<D>(raw, &["wsname"])?;
         // Legacy: `next if wsname.nil? || wsname.empty?`. Anything else without #empty?/#split
         // (false, 1) raises there and fails the WHOLE catalogue; never silently drop the pair.
         let ws = match info.get("wsname") {
             None | Some(Value::Null) => continue,
-            Some(Value::String(w)) if w.is_empty() => continue,
-            Some(Value::String(w)) => w.as_str(),
+            Some(w) if is_string(w) && string_eq(w, "") => continue,
+            Some(v) if is_string(v) => v,
             Some(Value::Array(a)) if a.is_empty() => continue, // [].empty? is true in Ruby too
             Some(Value::Object(m)) if m.is_empty() => continue,
-            Some(other) => return Err(format!("wsname: {other}")),
+            Some(other) => return Err(format!("wsname: {other}").into()),
         };
         if !seen.iter().any(|(w, _)| w == ws) {
             // A String containing "wsname" passes indexing but later lacks Hash#key?.
-            if !raw.is_object() {
+            if !raw.is_object() || is_string(raw) {
                 return Err("pair info has no key? method".into());
             }
-            seen.push((ws.to_string(), info));
+            seen.push((ws.clone(), info));
         }
     }
     let get = |info: &Map<String, Value>, k: &str| info.get(k).cloned().unwrap_or(Value::Null);
     Ok(Finished::Ok(
         seen.into_iter()
             .map(|(ws, info)| {
-                // String#split drops trailing empty fields, including all fields in "/".
-                let trimmed = ws.trim_end_matches('/');
-                let mut parts = trimmed.split('/').filter(|_| !trimmed.is_empty());
-                let base = parts.next().map(str::to_string);
-                let quote = parts.next().map(str::to_string);
-                let costmin = quote
-                    .as_deref()
-                    .and_then(|q| REAL_COSTMIN.iter().find(|(k, _)| *k == q))
+                let parts = D::string_op(&ws, StringOp::Split("/")).map_err(NormError::Num)?;
+                let base = parts[0].clone();
+                let quote = parts[1].clone();
+                let costmin = REAL_COSTMIN
+                    .iter()
+                    .find(|(k, _)| string_eq(&quote, k))
                     .map(|(_, lit)| serde_json::from_str::<Value>(lit).expect("literal"))
                     .or_else(|| info.get("costmin").filter(|v| truthy(Some(v))).cloned())
                     .unwrap_or(Value::from(0));
-                let trading_enabled =
-                    if info.get("aclass_base").and_then(Value::as_str) == Some("tokenized_asset") {
-                        false
-                    } else {
-                        info.get("status")
-                            .map(|s| s.as_str() == Some("online"))
-                            .unwrap_or(true)
-                    };
-                Ticker {
+                let trading_enabled = if info
+                    .get("aclass_base")
+                    .is_some_and(|v| string_eq(v, "tokenized_asset"))
+                {
+                    false
+                } else {
+                    info.get("status")
+                        .map(|s| string_eq(s, "online"))
+                        .unwrap_or(true)
+                };
+                Ok(Ticker {
                     ticker: get(&info, "altname"),
                     base,
                     quote,
@@ -355,9 +362,9 @@ pub fn tickers(data: &Value) -> Result<Finished<Vec<Ticker>>, String> {
                     quote_decimals: get(&info, "cost_decimals"),
                     price_decimals: get(&info, "pair_decimals"),
                     trading_enabled,
-                }
+                })
             })
-            .collect(),
+            .collect::<Result<Vec<_>, NormError<D::Error>>>()?,
     ))
 }
 
@@ -378,16 +385,12 @@ pub fn bid_ask<D: Num>(data: &Value) -> R<(D, D), D> {
         _ => None,
     }
     .ok_or("no ticker in result")?;
-    let first = string_fields(first, &["b", "a"])?;
+    let first = string_fields::<D>(first, &["b", "a"])?;
     let side = |k: &str| -> Result<D, NormError<D::Error>> {
         // Ruby [0]: array entry, first character, integer bit, or absent Hash key.
         let value = match first.get(k) {
             Some(Value::Array(a)) => a.first().cloned().unwrap_or(Value::Null),
-            Some(Value::String(s)) => s
-                .chars()
-                .next()
-                .map(|c| Value::String(c.to_string()))
-                .unwrap_or(Value::Null),
+            Some(v) if is_string(v) => D::string_op(v, StringOp::First).map_err(NormError::Num)?,
             Some(Value::Object(_)) => Value::Null,
             Some(Value::Number(n)) => {
                 let text = n.to_string();
@@ -404,18 +407,20 @@ pub fn bid_ask<D: Num>(data: &Value) -> R<(D, D), D> {
 }
 
 /// Exchanges::Kraken::ERROR_PATTERNS, first match wins. Ruby's \w and \S are ASCII here.
-pub fn classify_error(message: &str) -> Option<(&'static str, Vec<(&'static str, String)>)> {
-    static RES: std::sync::OnceLock<Vec<(&'static str, regex::Regex)>> = std::sync::OnceLock::new();
+pub type ClassifiedError = (&'static str, Vec<(&'static str, Vec<u8>)>);
+pub fn classify_error(message: &[u8]) -> Option<ClassifiedError> {
+    static RES: std::sync::OnceLock<Vec<(&'static str, regex::bytes::Regex)>> =
+        std::sync::OnceLock::new();
     let res = RES.get_or_init(|| vec![
-        ("regional_restriction", regex::Regex::new(r"\AEAccount:Invalid permissions:(?P<asset>[^ \t\r\n\x0B\x0C]+) trading restricted for (?P<country>[A-Za-z0-9_]+)\.?\z").unwrap()),
-        ("transient_nonce", regex::Regex::new(r"EAPI:Invalid nonce").unwrap()),
-        ("transient_unavailable", regex::Regex::new(r"EGeneral:Internal error|EService:(?:Unavailable|Busy|Deadline elapsed)").unwrap()),
+        ("regional_restriction", regex::bytes::Regex::new(r"(?-u)\AEAccount:Invalid permissions:(?P<asset>[^ \t\r\n\x0B\x0C]+) trading restricted for (?P<country>[A-Za-z0-9_]+)\.?\z").unwrap()),
+        ("transient_nonce", regex::bytes::Regex::new(r"EAPI:Invalid nonce").unwrap()),
+        ("transient_unavailable", regex::bytes::Regex::new(r"EGeneral:Internal error|EService:(?:Unavailable|Busy|Deadline elapsed)").unwrap()),
     ]);
     for (code, re) in res {
         if let Some(c) = re.captures(message) {
             let caps = ["asset", "country"]
                 .iter()
-                .filter_map(|n| c.name(n).map(|m| (*n, m.as_str().to_string())))
+                .filter_map(|n| c.name(n).map(|m| (*n, m.as_bytes().to_vec())))
                 .collect();
             return Some((code, caps));
         }

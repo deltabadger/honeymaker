@@ -51,6 +51,38 @@ class Honeymaker::Native::ConvertTest < Minitest::Test
     GC.stress = false
   end
 
+  def test_non_utf8_strings_roundtrip_with_bytes_and_encoding
+    ["O\xff", "O\xff".b, "é".b, "é".encode("ISO-8859-1")].each do |value|
+      got = ext.roundtrip_for_tests([value]).first
+      assert_equal value.bytes, got.bytes
+      assert_equal value.encoding, got.encoding
+    end
+  end
+
+  def test_invalid_string_hash_keys_roundtrip
+    ["O\xff", "O\xff".b, "é".b].each do |key|
+      got = ext.roundtrip_for_tests({ key => "value" }).keys.first
+      assert_equal key.bytes, got.bytes
+      assert_equal key.encoding, got.encoding
+    end
+  end
+
+  def test_internal_string_sentinel_names_are_ordinary_hash_keys
+    obj = { "\0ruby_string" => [[], "UTF-8"], "\0ruby_key:\"literal\"" => "value" }
+    assert_equal obj, ext.roundtrip_for_tests(obj)
+    assert_equal({ "\0ruby_string" => [[], "UTF-8"] }, ext.roundtrip_for_tests({ "\0ruby_string" => [[], "UTF-8"] }))
+  end
+
+  def test_invalid_decimal_strings_use_rubys_own_errors
+    ["1\xff", "1\xff".b].each do |value|
+      [true, false].each do |stringify|
+        want = (BigDecimal(value) rescue $!)
+        got = (ext.decimal_convert_for_tests(value, stringify) rescue $!)
+        assert_equal [want.class, want.message], [got.class, got.message]
+      end
+    end
+  end
+
   def test_shape_errors
     error = assert_raises(Honeymaker::Native::ShapeError) { ext.roundtrip_for_tests({ key: 1 }) }
     assert_equal "non-string key", error.message
