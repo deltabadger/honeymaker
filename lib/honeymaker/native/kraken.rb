@@ -21,7 +21,8 @@ module Honeymaker
       def query_orders_info(txid:, trades: nil, userref: nil, consolidate_taker: true)
         result = post_private("query_orders_info", trades: trades, userref: userref, txid: txid, consolidate_taker: consolidate_taker)
         finish("query_orders_info", result) do |orders|
-          orders.each { |id, order| order[:raw] = result.data["result"][id] }
+          (result.data["result"] || {}).each { |id, raw| orders[id][:raw] = raw }
+          orders
         end
       end
 
@@ -141,7 +142,12 @@ module Honeymaker
         result = get_extended_balance
         return Result::Failure.new("Invalid trading credentials") if result.failure?
 
-        finish("validate", result) { true }
+        errors = result.data["error"]
+        if errors.is_a?(Array) && errors.none?
+          Result::Success.new(true)
+        else
+          Result::Failure.new("Invalid trading credentials")
+        end
       end
 
       def validate_read_credentials
@@ -185,16 +191,13 @@ module Honeymaker
         return result if result.failure?
         # Guard in Ruby, before any conversion: a binary maintenance page must answer like the
         # hardened legacy, not fail inside the converter.
-        unless result.data.is_a?(Hash)
-          return op == "validate" ? Result::Failure.new("Invalid trading credentials") : unreadable
-        end
+        return unreadable unless result.data.is_a?(Hash)
 
         verdict = native.finish(op, result.data)
         case verdict[0]
         when "ok" then Result::Success.new(yield(verdict[1]))
         when "venue" then Result::Failure.new(*result.data["error"])
         when "unreadable" then unreadable
-        when "invalid" then Result::Failure.new("Invalid trading credentials")
         end
       end
 

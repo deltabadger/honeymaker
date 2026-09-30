@@ -178,6 +178,59 @@ class KrakenClientParityTest < Minitest::Test
     end
     assert_parity([ok({})], key: "", &:validate)
     assert_parity([ok({})]) { |c| c.validate(:bogus) }
+    ["", "null", "[1]", "5", "true", '"abc"', '"error"'].each do |body|
+      assert_parity([[200, JSON_CT, body]]) { |c| c.validate(:trading) }
+      assert_parity([[200, JSON_CT, body]]) { |c| c.validate(:read) }
+    end
+  end
+
+  def test_string_balance_entries
+    ["abc", "balance", "hold_trade balance"].each do |balance|
+      assert_parity([ok({ "X" => balance })], &:get_balances)
+    end
+  end
+
+  def test_array_balance_entries
+    [[["XXBT", { "balance" => "1" }]], ["x"], [["X", "abc"]], [["X", "balance"]],
+     [[nil, { "balance" => "1" }]], [[]],
+     [["XXBT", { "balance" => "1" }, "ignored"], ["XBT", { "balance" => "2" }]]].each do |balances|
+      assert_parity([ok(balances)], &:get_balances)
+    end
+  end
+
+  def test_array_order_entries
+    raw = { "vol" => "1", "vol_exec" => "1", "cost" => "2", "price" => "0" }
+    [[["O1", raw]], [[5, raw]], [[nil, raw]], ["x"], [["O1", "abc"]], [[]],
+     [["O1", raw, "ignored"], ["O1", raw.merge("vol" => "2")]]].each do |orders|
+      assert_parity([ok(orders)]) { |c| c.query_orders_info(txid: "O1") }
+    end
+  end
+
+  def test_string_order_descriptions
+    ["abc", "type", "ordertype price", "type ordertype price"].each do |descr|
+      raw = { "descr" => descr, "vol" => "1", "vol_exec" => "1", "cost" => "2", "price" => "0" }
+      assert_parity([ok({ "O1" => raw })]) { |c| c.query_orders_info(txid: "O1") }
+    end
+  end
+
+  def test_hash_and_string_order_txids
+    [{ "Z" => "first", "A" => "second" }, {}, "OX-1"].each do |txid|
+      assert_parity([ok({ "txid" => txid })]) do |c|
+        c.add_order(ordertype: "market", type: "buy", volume: "1", pair: "X")
+      end
+    end
+  end
+
+  def test_side_downcase_is_context_independent
+    raw = { "descr" => { "type" => "ΑΣ" }, "vol" => "1", "vol_exec" => "1", "cost" => "2", "price" => "0" }
+    assert_parity([ok({ "O1" => raw })]) { |c| c.query_orders_info(txid: "O1") }
+  end
+
+  def test_nil_parity_has_no_deprecation_warnings
+    _, warnings = capture_io do
+      assert_parity([ok({})]) { |c| c.add_order(ordertype: "market", type: "buy", volume: "1", pair: "X") }
+    end
+    refute_match(/DEPRECATED/, warnings)
   end
 
   def test_binary_maintenance_page_is_unreadable_like_legacy
