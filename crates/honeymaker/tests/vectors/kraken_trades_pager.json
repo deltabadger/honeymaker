@@ -1,0 +1,1583 @@
+[
+  {
+    "name": "one page",
+    "strict": "same",
+    "order_ids": [
+      "O1"
+    ],
+    "start": 1700000000,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"0.0006\",\"cost\":\"30\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5},\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"0.0006\",\"cost\":\"30\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":2}}"
+    ],
+    "requests": [
+      [
+        1700000000,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "0.0012",
+            "cost": "60.0",
+            "fee": "0.2",
+            "price": "50000.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "partial fill across pages, unwanted skipped",
+    "strict": "same",
+    "order_ids": [
+      "O1",
+      "O2"
+    ],
+    "start": 1700000000,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5},\"T2\":{\"ordertxid\":\"O9\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":3}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T3\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5},\"T4\":{\"ordertxid\":\"O2\",\"vol\":\"2\",\"cost\":\"8\",\"fee\":\"0.1\",\"type\":\"sell\",\"ordertype\":\"limit\",\"time\":1.5}},\"count\":3}}"
+    ],
+    "requests": [
+      [
+        1700000000,
+        0
+      ],
+      [
+        1700000000,
+        2
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "2.0",
+            "cost": "4.0",
+            "fee": "0.2",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ],
+        [
+          "O2",
+          {
+            "vol": "2.0",
+            "cost": "8.0",
+            "fee": "0.1",
+            "price": "4.0",
+            "side": "sell",
+            "order_type": "limit"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "no wanted ids: no request",
+    "strict": "same",
+    "order_ids": [],
+    "start": null,
+    "max_pages": 20,
+    "pages": [],
+    "requests": [],
+    "outcome": {
+      "ok": []
+    }
+  },
+  {
+    "name": "a trade on two pages: rows reach count, distinct trades do not",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5},\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"3\",\"cost\":\"9\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":3}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"3\",\"cost\":\"9\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":3}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ],
+      [
+        null,
+        2
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "4.0",
+            "cost": "11.0",
+            "fee": "0.2",
+            "price": "2.75",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "overlapping pages that cover every trade",
+    "strict": "same",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5},\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"3\",\"cost\":\"9\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":3}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"3\",\"cost\":\"9\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5},\"T3\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"1\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":3}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ],
+      [
+        null,
+        2
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "5.0",
+            "cost": "12.0",
+            "fee": "0.3",
+            "price": "2.4",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "complete exactly at the page cap",
+    "strict": "same",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 2,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":2}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":2}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ],
+      [
+        null,
+        1
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "2.0",
+            "cost": "4.0",
+            "fee": "0.2",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "an empty page after the last trade",
+    "strict": "same",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{},\"count\":0}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": []
+    }
+  },
+  {
+    "name": "a fill beyond the page cap",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 2,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O9\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":3}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O9\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":3}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T3\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":3}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ],
+      [
+        null,
+        1
+      ]
+    ],
+    "outcome": {
+      "ok": []
+    }
+  },
+  {
+    "name": "count as a string",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"2\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"2\"}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ],
+      [
+        null,
+        1
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "2.0",
+            "cost": "4.0",
+            "fee": "0.2",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "count 1_000 pages to max_pages",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 2,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"1_000\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"1_000\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T3\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"1_000\"}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ],
+      [
+        null,
+        1
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "2.0",
+            "cost": "4.0",
+            "fee": "0.2",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "bignum string count",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 3,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"99999999999999999999999\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"1\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T3\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"1\"}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ],
+      [
+        null,
+        1
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "2.0",
+            "cost": "4.0",
+            "fee": "0.2",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "bignum integer count",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 3,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":10000000000000000000000000}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":10000000000000000000000000}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T3\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":10000000000000000000000000}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T4\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":10000000000000000000000000}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ],
+      [
+        null,
+        1
+      ],
+      [
+        null,
+        2
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "3.0",
+            "cost": "6.0",
+            "fee": "0.3",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "float count",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":2.9}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":2.9}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T3\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":2.9}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ],
+      [
+        null,
+        1
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "2.0",
+            "cost": "4.0",
+            "fee": "0.2",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "missing count",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}}}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}}}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "1.0",
+            "cost": "2.0",
+            "fee": "0.1",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "nil count",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":null}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}}}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "1.0",
+            "cost": "2.0",
+            "fee": "0.1",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "negative count",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":-1}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}}}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "1.0",
+            "cost": "2.0",
+            "fee": "0.1",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "count \" 3\"",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 4,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\" 3\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\" 3\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T3\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\" 3\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T4\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\" 3\"}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ],
+      [
+        null,
+        1
+      ],
+      [
+        null,
+        2
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "3.0",
+            "cost": "6.0",
+            "fee": "0.3",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "count \"3abc\"",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 4,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"3abc\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"3abc\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T3\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"3abc\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T4\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"3abc\"}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ],
+      [
+        null,
+        1
+      ],
+      [
+        null,
+        2
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "3.0",
+            "cost": "6.0",
+            "fee": "0.3",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "count \"0x10\"",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 4,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"0x10\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"0x10\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T3\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"0x10\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T4\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"0x10\"}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "1.0",
+            "cost": "2.0",
+            "fee": "0.1",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "count \"_3\"",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 4,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"_3\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"_3\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T3\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"_3\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T4\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"_3\"}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "1.0",
+            "cost": "2.0",
+            "fee": "0.1",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "count \"3__0\"",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 4,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"3__0\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"3__0\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T3\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"3__0\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T4\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"3__0\"}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ],
+      [
+        null,
+        1
+      ],
+      [
+        null,
+        2
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "3.0",
+            "cost": "6.0",
+            "fee": "0.3",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "count \"+3\"",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 4,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"+3\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"+3\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T3\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"+3\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T4\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"+3\"}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ],
+      [
+        null,
+        1
+      ],
+      [
+        null,
+        2
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "3.0",
+            "cost": "6.0",
+            "fee": "0.3",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "count \"-3\"",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 4,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"-3\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"-3\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T3\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"-3\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T4\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"-3\"}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "1.0",
+            "cost": "2.0",
+            "fee": "0.1",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "count \"\"",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 4,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T3\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T4\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"\"}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "1.0",
+            "cost": "2.0",
+            "fee": "0.1",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "count \"abc\"",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 4,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"abc\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"abc\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T3\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"abc\"}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T4\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":\"abc\"}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "1.0",
+            "cost": "2.0",
+            "fee": "0.1",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "empty trades before count",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{},\"count\":5}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":5}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": []
+    }
+  },
+  {
+    "name": "missing trades",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"count\":3}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}}}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": []
+    }
+  },
+  {
+    "name": "trades false",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":false,\"count\":3}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}}}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": []
+    }
+  },
+  {
+    "name": "trades []",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":[],\"count\":3}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}}}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": []
+    }
+  },
+  {
+    "name": "trades \"\"",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":\"\",\"count\":3}}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}}}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": []
+    }
+  },
+  {
+    "name": "nil result",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[]}",
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}}}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": []
+    }
+  },
+  {
+    "name": "result as a string raises",
+    "strict": "same",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":\"x\"}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "raise": "TypeError"
+    }
+  },
+  {
+    "name": "result as an array raises",
+    "strict": "same",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":[1]}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "raise": "TypeError"
+    }
+  },
+  {
+    "name": "result false raises",
+    "strict": "same",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":false}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "raise": "TypeError"
+    }
+  },
+  {
+    "name": "trades as a non-empty array",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":[1],\"count\":1}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "raise": "NoMethodError"
+    }
+  },
+  {
+    "name": "trades as a non-empty string",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":\"x\",\"count\":1}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "raise": "NoMethodError"
+    }
+  },
+  {
+    "name": "trades as a number",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":5,\"count\":1}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "raise": "NoMethodError"
+    }
+  },
+  {
+    "name": "trades false with count 0",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":false,\"count\":0}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": []
+    }
+  },
+  {
+    "name": "trades [] with count 0",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":[],\"count\":0}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": []
+    }
+  },
+  {
+    "name": "trades \"\" with count 0",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":\"\",\"count\":0}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": []
+    }
+  },
+  {
+    "name": "trades null with count 0",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":null,\"count\":0}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": []
+    }
+  },
+  {
+    "name": "trades missing with count 0",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"count\":0}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": []
+    }
+  },
+  {
+    "name": "a trade that is a string",
+    "strict": "error",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":\"no id here\",\"T2\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":2}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "1.0",
+            "cost": "2.0",
+            "fee": "0.1",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "a record without ordertxid",
+    "strict": "error",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"vol\":\"1\",\"cost\":\"2\"}},\"count\":1}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": []
+    }
+  },
+  {
+    "name": "a record with a numeric ordertxid",
+    "strict": "error",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":5,\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":1}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": []
+    }
+  },
+  {
+    "name": "a trade that is a number raises",
+    "strict": "same",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":5},\"count\":1}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "raise": "TypeError"
+    }
+  },
+  {
+    "name": "a trade that is null raises",
+    "strict": "same",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":null},\"count\":1}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "raise": "NoMethodError"
+    }
+  },
+  {
+    "name": "count true",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":true}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "raise": "NoMethodError"
+    }
+  },
+  {
+    "name": "count as an array",
+    "strict": "incomplete",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":[1]}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "raise": "NoMethodError"
+    }
+  },
+  {
+    "name": "refusal on page 2",
+    "strict": "same",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":5}}",
+      "{\"error\":[\"EAPI:Rate limit exceeded\"]}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ],
+      [
+        null,
+        1
+      ]
+    ],
+    "outcome": {
+      "venue": [
+        "EAPI:Rate limit exceeded"
+      ]
+    }
+  },
+  {
+    "name": "falsy errors are not a refusal",
+    "strict": "same",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[null,false],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":1}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "1.0",
+            "cost": "2.0",
+            "fee": "0.1",
+            "price": "2.0",
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "non-object page 2 is unreadable",
+    "strict": "same",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":5}}",
+      "\"oops\""
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ],
+      [
+        null,
+        1
+      ]
+    ],
+    "outcome": {
+      "unreadable": true
+    }
+  },
+  {
+    "name": "pages run out: legacy sees null",
+    "strict": "same",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"1\",\"cost\":\"2\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":5}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ],
+      [
+        null,
+        1
+      ]
+    ],
+    "outcome": {
+      "unreadable": true
+    }
+  },
+  {
+    "name": "zero volume has no price",
+    "strict": "same",
+    "order_ids": [
+      "O1"
+    ],
+    "start": null,
+    "max_pages": 20,
+    "pages": [
+      "{\"error\":[],\"result\":{\"trades\":{\"T1\":{\"ordertxid\":\"O1\",\"vol\":\"0\",\"cost\":\"0\",\"fee\":\"0.1\",\"type\":\"buy\",\"ordertype\":\"market\",\"time\":1.5}},\"count\":1}}"
+    ],
+    "requests": [
+      [
+        null,
+        0
+      ]
+    ],
+    "outcome": {
+      "ok": [
+        [
+          "O1",
+          {
+            "vol": "0.0",
+            "cost": "0.0",
+            "fee": "0.1",
+            "price": null,
+            "side": "buy",
+            "order_type": "market"
+          }
+        ]
+      ]
+    }
+  }
+]
