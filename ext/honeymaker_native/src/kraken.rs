@@ -43,7 +43,8 @@ pub(crate) fn verdict<T>(
             out.push(ruby.str_new("ok"))?;
             out.push(ok(v)?)?;
         }
-        Finished::Venue => out.push(ruby.str_new("venue"))?,
+        // The Ruby wrapper builds its Failure from result.data["error"], exactly as legacy.
+        Finished::Venue(_) => out.push(ruby.str_new("venue"))?,
         Finished::Unreadable => out.push(ruby.str_new("unreadable"))?,
     }
     Ok(out)
