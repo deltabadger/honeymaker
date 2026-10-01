@@ -4,8 +4,10 @@
 # API, back to back. Places NO order: AddOrder runs only with validate=true, and only when
 # KRAKEN_KEY_CAN_TRADE=1.
 #   bundle exec ruby -Ilib script/parity/kraken_client_live.rb                          # public checks
-#   KRAKEN_API_KEY=… KRAKEN_API_SECRET=… [KRAKEN_KEY_CAN_TRADE=1] [LOCAL_PROXY=1] \
-#     bundle exec ruby -Ilib script/parity/kraken_client_live.rb
+#   KRAKEN_API_KEY=… KRAKEN_API_SECRET=… KRAKEN_KNOWN_CL_ORD_ID=… KRAKEN_KNOWN_TXID=… \
+#     [KRAKEN_KEY_CAN_TRADE=1] [LOCAL_PROXY=1] bundle exec ruby -Ilib script/parity/kraken_client_live.rb
+# With a key, the known order (one placed with that cl_ord_id) is mandatory: it is the only proof
+# of Kraken's cl_ord_id filter, count and echo that order_by_client_id's absence rests on.
 # The key must be one lent for this check, never a bot's key: nonces are per key.
 require "honeymaker"
 require "bigdecimal"
@@ -21,6 +23,11 @@ PROBE = File.join(ROOT, "target/debug/examples/probe")
 KEY = ENV["KRAKEN_API_KEY"]
 SECRET = ENV["KRAKEN_API_SECRET"]
 PRIVATE = !KEY.to_s.empty?
+KNOWN_CL_ORD_ID = ENV["KRAKEN_KNOWN_CL_ORD_ID"].to_s
+KNOWN_TXID = ENV["KRAKEN_KNOWN_TXID"].to_s
+if PRIVATE && (KNOWN_CL_ORD_ID.empty? || KNOWN_TXID.empty?)
+  abort "FAILED: a private run needs KRAKEN_KNOWN_CL_ORD_ID and KRAKEN_KNOWN_TXID (an order placed with that cl_ord_id)"
+end
 ASSET_MAP = Honeymaker::Clients::Kraken::ASSET_MAP
 FAILURES = []
 
@@ -42,11 +49,17 @@ end
 
 def d(x) = x.nil? ? nil : BigDecimal(x.to_s)
 
-# deltabadger's get_balances for one asset: last matching entry wins (Ruling R9).
+# deltabadger's get_balances for one asset: last matching entry wins (Ruling R9). Rails digs
+# result and hold_trade with dig_or_raise, so a nil there is :raise (the client answers Ambiguous).
 def rails_free(result, sym)
+  return :raise if result.nil?
+
   result.reduce(BigDecimal("0")) do |free, (code, b)|
     base = code.split(".").first
-    (ASSET_MAP[base] || base) == sym ? BigDecimal(b["balance"].to_s) - BigDecimal((b["hold_trade"] || "0").to_s) : free
+    next free unless (ASSET_MAP[base] || base) == sym
+    return :raise if b["balance"].nil? || b["hold_trade"].nil?
+
+    BigDecimal(b["balance"].to_s) - BigDecimal(b["hold_trade"].to_s)
   end
 end
 
@@ -66,10 +79,15 @@ def run(proxy)
   return unless PRIVATE
 
   bal = legacy(proxy).get_extended_balance.data["result"]
-  syms = bal.keys.map { |c| b = c.split(".").first; ASSET_MAP[b] || b }.uniq | %w[EUR USD]
+  syms = bal.to_h.keys.map { |c| b = c.split(".").first; ASSET_MAP[b] || b }.uniq | %w[EUR USD]
   syms.each do |sym|
     r = rust("balance", { asset: sym }, proxy)
-    check("balance #{sym}#{tag}", r["class"] == "ok" && d(r["value"]) == rails_free(bal, sym), "#{r['value']} vs #{rails_free(bal, sym).to_s('F')}")
+    want = rails_free(bal, sym)
+    if want == :raise
+      check("balance #{sym}#{tag} (Rails raises)", r["class"] == "ambiguous", r.inspect)
+    else
+      check("balance #{sym}#{tag}", r["class"] == "ok" && d(r["value"]) == want, "#{r['value']} vs #{want.to_s('F')}")
+    end
   end
 
   closed = raw_post(proxy, "/0/private/ClosedOrders", { ofs: 0 }).data["result"]
@@ -108,9 +126,18 @@ def run(proxy)
   else
     puts "SKIP cl_ord_id filter proof: the account has no closed orders"
   end
-  if ENV["KRAKEN_KNOWN_CL_ORD_ID"] && ENV["KRAKEN_KNOWN_TXID"]
-    r = rust("order_by_client_id", { cl_ord_id: ENV["KRAKEN_KNOWN_CL_ORD_ID"], since: (Time.now.utc - (30 * 86_400)).iso8601 }, proxy)
-    check("order_by_client_id finds a real order#{tag}", r["class"] == "ok" && r.dig("value", "txid") == ENV["KRAKEN_KNOWN_TXID"], r.inspect)
+  r = rust("order_by_client_id", { cl_ord_id: KNOWN_CL_ORD_ID, since: (Time.now.utc - (30 * 86_400)).iso8601 }, proxy)
+  check("order_by_client_id finds a real order#{tag}", r["class"] == "ok" && r.dig("value", "txid") == KNOWN_TXID, r.inspect)
+  open_known = raw_post(proxy, "/0/private/OpenOrders", { cl_ord_id: KNOWN_CL_ORD_ID }).data["result"]["open"].to_h
+  if open_known.key?(KNOWN_TXID)
+    check("OpenOrders filters by cl_ord_id and echoes it#{tag}",
+          open_known.keys == [KNOWN_TXID] && open_known[KNOWN_TXID]["cl_ord_id"].to_s == KNOWN_CL_ORD_ID, open_known.keys.inspect)
+  else
+    puts "SKIP OpenOrders echo: the known order is no longer open"
+    closed_known = raw_post(proxy, "/0/private/ClosedOrders", { cl_ord_id: KNOWN_CL_ORD_ID, ofs: 0 }).data["result"]
+    check("ClosedOrders filters by cl_ord_id, counts and echoes it#{tag}",
+          closed_known["count"].to_i == 1 && closed_known["closed"].to_h.keys == [KNOWN_TXID] &&
+            closed_known["closed"][KNOWN_TXID]["cl_ord_id"].to_s == KNOWN_CL_ORD_ID, closed_known.inspect)
   end
 
   return unless ENV["KRAKEN_KEY_CAN_TRADE"] == "1"

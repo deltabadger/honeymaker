@@ -115,7 +115,11 @@ async fn connect_any_with<T, F: Future<Output = io::Result<T>>>(
                     *attempt = None;
                     match result {
                         Ok(stream) => return Poll::Ready(Ok(stream)),
-                        Err(error) => last_error = Some(error),
+                        Err(error) => {
+                            last_error = Some(error);
+                            // RFC 8305 §5 / Ruby: a failure starts the next address at once.
+                            next_attempt.as_mut().reset(Instant::now());
+                        }
                     }
                 }
             }
@@ -152,6 +156,8 @@ fn tcp_failure(host: &str, port: u16, e: &io::Error) -> Failure {
             Cause::Unreachable,
             format!("Failed to open TCP connection to {host}:{port} ({e})"),
         ),
+        // EHOSTDOWN lands here (std has no kind for it): Rails lists it as pre-transmission, but
+        // Ambiguous is the safe side, so it is not mapped to Unreachable.
         _ => Failure::new(
             Cause::Other,
             format!("Failed to open TCP connection to {host}:{port} ({e})"),
@@ -405,6 +411,41 @@ mod tests {
                     .collect::<Vec<_>>()
             );
             assert_eq!(dropped.get(), winner + 1, "no attempt survives the winner");
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_failed_attempt_starts_the_next_address_at_once() {
+        // RFC 8305 §5 and Ruby's Happy Eyeballs: a failure does not wait out the 250 ms stagger.
+        for fail_after in [0, 100] {
+            let addrs = addresses();
+            let started = Instant::now();
+            let starts = RefCell::new(Vec::new());
+            let connected = connect_any_with(&addrs, started + Duration::from_secs(2), |addr| {
+                starts.borrow_mut().push((addr, started.elapsed()));
+                async move {
+                    if addr == addrs[0] {
+                        tokio::time::sleep(Duration::from_millis(fail_after)).await;
+                        return Err(io::Error::from(io::ErrorKind::ConnectionRefused));
+                    }
+                    if addr == addrs[1] {
+                        std::future::pending::<()>().await;
+                    }
+                    Ok(addr)
+                }
+            })
+            .await
+            .unwrap();
+            assert_eq!(connected, addrs[2]);
+            let ms = |m| Duration::from_millis(m);
+            assert_eq!(
+                *starts.borrow(),
+                vec![
+                    (addrs[0], ms(0)),
+                    (addrs[1], ms(fail_after)),
+                    (addrs[2], ms(fail_after + 250)),
+                ]
+            );
         }
     }
 

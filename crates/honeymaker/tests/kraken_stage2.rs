@@ -298,6 +298,15 @@ fn run(
 }
 
 #[test]
+fn a_numeric_cl_ord_id_echo_matches_its_text() {
+    let mut l = ClientIdLookup::new("123", 1_727_690_400);
+    let mut o = kraken_order(None);
+    o["cl_ord_id"] = json!(123);
+    let step = l.feed::<BigDecimal>(&open(json!({ "O1": o }))).unwrap();
+    assert!(matches!(step, Step::Found(o) if o.order_id == json!("O1")));
+}
+
+#[test]
 fn an_open_order_is_found_without_reading_closed_orders() {
     let (calls, end) = run(vec![open(json!({ "O1": kraken_order(Some("c-1")) }))]);
     assert!(matches!(end, Step::Found(o) if o.order_id == json!("O1")));
@@ -545,12 +554,39 @@ fn free_balance_follows_rails_last_entry_wins_rule() {
     // Rails assigns balances[asset.id] per entry: a later EUR.HOLD replaces ZEUR, zeros included.
     let later = json!({ "error": [], "result": { "ZEUR": { "balance": "100", "hold_trade": "0" }, "EUR.HOLD": { "balance": "0", "hold_trade": "0" } } });
     assert_eq!(fb(later, "EUR"), dec("0"));
+}
+
+#[test]
+fn free_balance_raises_like_rails_dig_or_raise_on_a_missing_result_or_hold_trade() {
+    // Rails digs result and hold_trade with dig_or_raise: nil raises, it is never read as 0.
+    for body in [
+        json!({ "error": [], "result": { "ZUSD": { "balance": "5" } } }),
+        json!({ "error": [], "result": { "ZUSD": { "balance": "5", "hold_trade": null } } }),
+        json!({ "error": [], "result": { "ZUSD": { "hold_trade": "0" } } }),
+        json!({ "error": [] }),
+        json!({ "error": [], "result": null }),
+    ] {
+        assert!(
+            normalize::free_balance::<BigDecimal>(&body, "USD").is_err(),
+            "{body}"
+        );
+    }
+    // Only the matching entry is dug: another asset's missing hold_trade is not read.
+    let other = json!({ "error": [], "result": { "ZUSD": { "balance": "5" } } });
     assert_eq!(
-        fb(
-            json!({ "error": [], "result": { "ZUSD": { "balance": "5" } } }),
-            "USD"
-        ),
-        dec("5"),
-        "no hold_trade"
+        ok(normalize::free_balance::<BigDecimal>(&other, "EUR").unwrap()),
+        dec("0")
     );
+}
+
+#[test]
+fn credentials_debug_shows_the_key_and_redacts_the_secret() {
+    let c = Credentials {
+        api_key: "KEY-123".into(),
+        api_secret: "c2VjcmV0LXNlY3JldA==".into(),
+    };
+    let shown = format!("{c:?}");
+    assert!(shown.contains("KEY-123"), "{shown}");
+    assert!(shown.contains("<redacted>"), "{shown}");
+    assert!(!shown.contains("c2VjcmV0LXNlY3JldA=="), "{shown}");
 }

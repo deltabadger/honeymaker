@@ -47,7 +47,9 @@ puts "wrote #{wire.size} AddOrder wire vectors"
 # pages. Each case says what the STRICT Rust scan must do: "same" as Ruby (a completed scan, a
 # refusal, an unreadable page or a Ruby exception), "incomplete" where Ruby stopped early or
 # trusted a malformed container and returned what it had, or "error" where Ruby skipped a malformed
-# record that Rust must refuse.
+# record that Rust must refuse. The label is what Rust must do, not what Ruby did: some
+# "incomplete" cases are Ruby raises (NoMethodError on trades as a non-empty array, a non-empty
+# string or a number, and on count true or an array), not partial answers. Their "outcome" says so.
 def page(trades, count = :none)
   result = { "trades" => trades }
   result["count"] = count unless count == :none

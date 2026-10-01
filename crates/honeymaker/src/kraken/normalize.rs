@@ -148,9 +148,14 @@ pub fn balances<D: Num>(data: &Value) -> R<Vec<KrakenBalance<D>>, D> {
 
 /// deltabadger's Exchanges::Kraken#get_balances for one asset: each code is split at "." and
 /// mapped (ZEUR → EUR, XXBT → XBT); free = balance − hold_trade; a later entry for the same asset
-/// replaces an earlier one (Hash assignment), zeros included; an absent asset is 0.
+/// replaces an earlier one (Hash assignment), zeros included; an absent asset is 0. Rails digs
+/// result and the matching entry's hold_trade with dig_or_raise, so nil there is an error, not 0
+/// (false raises too, on `.each` / `.to_d`).
 pub fn free_balance<D: Num>(data: &Value, symbol: &str) -> R<D, D> {
     let obj = envelope_or_return!(data);
+    if !truthy(obj.get("result")) {
+        return Err("result: missing".to_string().into());
+    }
     let mut free = D::parse("0").map_err(NormError::Num)?;
     for (code, balance) in result_entries(obj)? {
         let Some(code) = code.as_str() else {
@@ -167,12 +172,11 @@ pub fn free_balance<D: Num>(data: &Value, symbol: &str) -> R<D, D> {
         }
         let b = string_fields::<D>(balance, &["balance", "hold_trade"])?;
         let total: D = dec(b.get("balance"))?;
-        let hold = b
-            .get("hold_trade")
-            .filter(|v| truthy(Some(v)))
-            .cloned()
-            .unwrap_or(Value::String("0".into()));
-        free = total.sub(&dec::<D>(Some(&hold))?).map_err(NormError::Num)?;
+        let hold = b.get("hold_trade").filter(|v| truthy(Some(v)));
+        let Some(hold) = hold else {
+            return Err(format!("hold_trade: missing for {code}").into());
+        };
+        free = total.sub(&dec::<D>(Some(hold))?).map_err(NormError::Num)?;
     }
     Ok(Finished::Ok(free))
 }
