@@ -415,3 +415,108 @@ fn empty_json_containers_do_not_increment_the_nesting_limit() {
         );
     }
 }
+
+#[test]
+fn invalid_utf8_in_an_add_order_description_still_parses() {
+    let body =
+        b"{\"error\":[],\"result\":{\"txid\":[\"OTX-1\"],\"descr\":{\"order\":\"buy \xff\"}}}";
+    assert_eq!(
+        decoded(raw(200, Some("application/json"), None, body.to_vec())),
+        Reply::Parsed(
+            json!({"error": [], "result": {"txid": ["OTX-1"], "descr": {"order": "buy �"}}})
+        )
+    );
+}
+
+#[test]
+fn invalid_utf8_does_not_relax_json_strictness() {
+    for bad in [
+        "NaN",
+        "Infinity",
+        "-Infinity",
+        r#""\q""#,
+        r#""\ud800""#,
+        r#""\udc00""#,
+        r#""\ud800\u0041""#,
+        r#""\uZZZZ""#,
+        "01",
+        "\"raw\nnewline\"",
+        r#"{"a":1,"a":2}"#,
+        r#"{"a":1,"\u0061":2}"#,
+        r#"{"nested":{"a":1,"a":2}}"#,
+    ] {
+        for prefix in [b"[".as_slice(), b"[\"\xff\","] {
+            let body = [prefix, bad.as_bytes(), b"]"].concat();
+            assert_eq!(
+                decoded(raw(200, Some("application/json"), None, body.clone())),
+                st(200, &String::from_utf8_lossy(&body)),
+                "{bad}"
+            );
+        }
+    }
+    for body in [
+        b"\xef\xbb\xbf{}".as_slice(),
+        b"\xff{}",
+        b"{\"a\":1} trailing",
+    ] {
+        assert_eq!(
+            decoded(raw(200, Some("application/json"), None, body.to_vec())),
+            st(200, &String::from_utf8_lossy(body))
+        );
+    }
+    let body = b"[\"\xff\",\"\\ud83d\\ude00\"]";
+    assert_eq!(
+        decoded(raw(200, Some("application/json"), None, body.to_vec())),
+        Reply::Parsed(json!(["�", "😀"]))
+    );
+    for depth in [100, 101] {
+        let body = [
+            "[".repeat(depth).as_bytes(),
+            b"\"\xff\"",
+            "]".repeat(depth).as_bytes(),
+        ]
+        .concat();
+        let result = decoded(raw(200, Some("application/json"), None, body.clone()));
+        if depth == 100 {
+            assert!(matches!(result, Reply::Parsed(_)));
+        } else {
+            assert_eq!(result, st(200, &String::from_utf8_lossy(&body)));
+        }
+    }
+}
+
+#[test]
+fn duplicate_keys_are_compared_before_lossy_decoding() {
+    for body in [
+        b"{\"\xff\":1,\"\xff\":2}".as_slice(),
+        b"{\"\xffa\":1,\"\xff\\u0061\":2}",
+        b"{\"\xff\":0,\"nested\":{\"a\":1,\"\\u0061\":2}}",
+        b"{\"\xff\":0,\"nested\":{\"\xc3\xa9\":1,\"\\u00e9\":2}}",
+    ] {
+        assert_eq!(
+            decoded(raw(200, Some("application/json"), None, body.to_vec())),
+            st(200, &String::from_utf8_lossy(body))
+        );
+    }
+    let body = b"{\"\xff\":1,\"\xfe\":2,\"\xef\xbf\xbd\":3}";
+    assert!(
+        matches!(
+            decoded(raw(200, Some("application/json"), None, body.to_vec())),
+            Reply::Parsed(_)
+        ),
+        "distinct byte keys must not become a duplicate-key parse error"
+    );
+    // Lossy key collisions must not hide an over-deep subtree when Value keeps the last key.
+    let body = [
+        b"{\"\xff\":".as_slice(),
+        "[".repeat(100).as_bytes(),
+        b"0",
+        "]".repeat(100).as_bytes(),
+        b",\"\xfe\":0}",
+    ]
+    .concat();
+    assert_eq!(
+        decoded(raw(200, Some("application/json"), None, body.clone())),
+        st(200, &String::from_utf8_lossy(&body))
+    );
+}

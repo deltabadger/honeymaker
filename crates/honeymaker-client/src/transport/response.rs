@@ -1,7 +1,7 @@
 //! What the gem's Net::HTTP + Faraday stack turns an HTTP answer into (Ruling R6).
 use super::{BodyFraming, Cause, Failure, Raw, Reply};
 use flate2::read::{GzDecoder, ZlibDecoder};
-use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
+use serde::de::{Deserialize, Deserializer, Visitor};
 use std::collections::HashSet;
 use std::fmt;
 use std::io::Read;
@@ -101,74 +101,69 @@ pub fn shape(method: &str, url: &str, raw: Raw) -> Reply {
     }
 }
 
-/// JSON.parse under json 3.0.2: duplicate keys and nesting above 100 are parse errors.
+/// JSON 3.0.2 accepts invalid UTF-8 in strings. Rust values use replacement characters;
+/// downstream interpretation uses ASCII tokens. Syntax (including escapes and surrogates)
+/// remains strict, and duplicate keys are compared as unescaped bytes before lossy conversion.
 fn parse_strict(body: &[u8]) -> Option<serde_json::Value> {
-    let v = serde_json::from_slice(body).ok()?;
-    if !within_nesting_limit(&v, 0) {
-        return None;
-    }
-    serde_json::from_slice::<NoDuplicateKeys>(body).ok()?;
-    Some(v)
+    let text = String::from_utf8_lossy(body);
+    let value = serde_json::from_str(&text).ok()?;
+    validate_structure(body)?;
+    Some(value)
 }
 
-fn within_nesting_limit(value: &serde_json::Value, depth: usize) -> bool {
-    // JSON 3.0.2 handles empty containers before incrementing current_nesting. Walking Value
-    // also avoids counting arbitrary_precision's synthetic number maps as JSON containers.
-    match value {
-        serde_json::Value::Array(a) if !a.is_empty() => {
-            depth < 100 && a.iter().all(|v| within_nesting_limit(v, depth + 1))
-        }
-        serde_json::Value::Object(m) if !m.is_empty() => {
-            depth < 100 && m.values().all(|v| within_nesting_limit(v, depth + 1))
-        }
-        _ => true,
-    }
-}
-
-/// Walks a document and fails on the first repeated key. With `arbitrary_precision`, numbers
-/// arrive as one-key maps, which pass.
-struct NoDuplicateKeys;
-impl<'de> Deserialize<'de> for NoDuplicateKeys {
-    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        d.deserialize_any(Walk)
-    }
-}
-struct Walk;
-impl<'de> Visitor<'de> for Walk {
-    type Value = NoDuplicateKeys;
-    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("JSON")
-    }
-    fn visit_bool<E>(self, _: bool) -> Result<Self::Value, E> {
-        Ok(NoDuplicateKeys)
-    }
-    fn visit_i64<E>(self, _: i64) -> Result<Self::Value, E> {
-        Ok(NoDuplicateKeys)
-    }
-    fn visit_u64<E>(self, _: u64) -> Result<Self::Value, E> {
-        Ok(NoDuplicateKeys)
-    }
-    fn visit_f64<E>(self, _: f64) -> Result<Self::Value, E> {
-        Ok(NoDuplicateKeys)
-    }
-    fn visit_str<E>(self, _: &str) -> Result<Self::Value, E> {
-        Ok(NoDuplicateKeys)
-    }
-    fn visit_unit<E>(self) -> Result<Self::Value, E> {
-        Ok(NoDuplicateKeys)
-    }
-    fn visit_seq<A: SeqAccess<'de>>(self, mut a: A) -> Result<Self::Value, A::Error> {
-        while a.next_element::<NoDuplicateKeys>()?.is_some() {}
-        Ok(NoDuplicateKeys)
-    }
-    fn visit_map<A: MapAccess<'de>>(self, mut m: A) -> Result<Self::Value, A::Error> {
-        let mut seen = HashSet::new();
-        while let Some(k) = m.next_key::<String>()? {
-            if !seen.insert(k.clone()) {
-                return Err(de::Error::custom(format!("duplicate key {k:?}")));
+/// The lossy parse has already checked grammar. Walk the original tokens to check byte-key
+/// identity and depth: distinct invalid keys can collapse in Value, hiding keys or subtrees.
+fn validate_structure(mut body: &[u8]) -> Option<()> {
+    let mut containers: Vec<Option<HashSet<Vec<u8>>>> = Vec::new();
+    while let Some((&token, rest)) = body.split_first() {
+        match token {
+            b'{' | b'[' => {
+                containers.push((token == b'{').then(HashSet::new));
+                // json 3.0.2 handles empty containers before incrementing current_nesting.
+                let closing = if token == b'{' { b'}' } else { b']' };
+                if containers.len() > 100
+                    && rest.iter().find(|b| !b.is_ascii_whitespace()) != Some(&closing)
+                {
+                    return None;
+                }
             }
-            m.next_value::<NoDuplicateKeys>()?;
+            b'}' | b']' => {
+                containers.pop()?;
+            }
+            b'"' => {
+                let mut strings =
+                    serde_json::Deserializer::from_slice(body).into_iter::<ByteString>();
+                let string = strings.next()?.ok()?.0;
+                body = &body[strings.byte_offset()..];
+                if body.iter().find(|b| !b.is_ascii_whitespace()) == Some(&b':')
+                    && !containers.last_mut()?.as_mut()?.insert(string)
+                {
+                    return None;
+                }
+                continue;
+            }
+            _ => {}
         }
-        Ok(NoDuplicateKeys)
+        body = rest;
+    }
+    Some(())
+}
+
+/// serde's byte-string decoder retains invalid UTF-8 and unescapes keys for comparison.
+/// Its permissive escape handling is safe only after the strict string parse above.
+struct ByteString(Vec<u8>);
+impl<'de> Deserialize<'de> for ByteString {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        d.deserialize_bytes(ByteStringVisitor)
+    }
+}
+struct ByteStringVisitor;
+impl<'de> Visitor<'de> for ByteStringVisitor {
+    type Value = ByteString;
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("a JSON string")
+    }
+    fn visit_bytes<E>(self, bytes: &[u8]) -> Result<Self::Value, E> {
+        Ok(ByteString(bytes.to_vec()))
     }
 }

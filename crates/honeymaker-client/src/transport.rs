@@ -414,11 +414,16 @@ impl Transport {
         let exchange = async move {
             let resp = sender.send_request(http_req).await?;
             let status = resp.status().as_u16();
+            // Net::HTTPHeader#[] joins every field value, preserving non-ASCII bytes.
+            // Raw stores Strings, so retain those values with lossy UTF-8 decoding.
             let header = |name: hyper::header::HeaderName| {
-                resp.headers()
-                    .get(name)
-                    .and_then(|v| v.to_str().ok())
-                    .map(str::to_string)
+                let mut values = resp.headers().get_all(name).iter();
+                let mut joined = String::from_utf8_lossy(values.next()?.as_bytes()).into_owned();
+                for value in values {
+                    joined.push_str(", ");
+                    joined.push_str(&String::from_utf8_lossy(value.as_bytes()));
+                }
+                Some(joined)
             };
             let content_type = header(hyper::header::CONTENT_TYPE);
             let content_encoding = header(hyper::header::CONTENT_ENCODING);
