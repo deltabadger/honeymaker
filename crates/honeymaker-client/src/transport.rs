@@ -75,6 +75,8 @@ pub enum Reply {
 
 mod connect;
 mod io_timeout;
+mod response;
+pub use response::{decode, shape};
 
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
@@ -145,6 +147,14 @@ pub struct Request {
     pub body: Option<String>,
 }
 
+/// How Net::HTTP terminates the body read, which determines whether inflater finish errors escape.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BodyFraming {
+    ContentLength,
+    Chunked,
+    CloseDelimited,
+}
+
 #[derive(Debug)]
 pub struct Raw {
     pub status: u16,
@@ -153,6 +163,7 @@ pub struct Raw {
     pub content_encoding: Option<String>,
     /// Net::HTTP leaves a Content-Range body encoded.
     pub content_range: bool,
+    pub framing: BodyFraming,
     pub body: Bytes,
 }
 
@@ -352,6 +363,12 @@ impl Transport {
         format!("{}{path_and_query}", self.base)
     }
 
+    /// Send, inflate, and shape a reply as the gem's Net::HTTP + Faraday stack does.
+    pub async fn request(&self, req: &Request) -> Result<Reply, Failure> {
+        let raw = decode(self.send(req).await?)?;
+        Ok(shape(req.method, &self.url(&req.path_and_query), raw))
+    }
+
     /// One request on its own connection (Ruling R3). Never retried.
     pub async fn send(&self, req: &Request) -> Result<Raw, Failure> {
         // Built before connecting: a header Ruby would refuse (a pasted key with a newline) fails
@@ -406,12 +423,30 @@ impl Transport {
             let content_type = header(hyper::header::CONTENT_TYPE);
             let content_encoding = header(hyper::header::CONTENT_ENCODING);
             let content_range = resp.headers().contains_key(hyper::header::CONTENT_RANGE);
+            let chunked = resp
+                .headers()
+                .get_all(hyper::header::TRANSFER_ENCODING)
+                .iter()
+                .any(|v| {
+                    v.to_str().is_ok_and(|v| {
+                        v.split(',')
+                            .any(|coding| coding.trim().eq_ignore_ascii_case("chunked"))
+                    })
+                });
+            let framing = if chunked {
+                BodyFraming::Chunked
+            } else if resp.headers().contains_key(hyper::header::CONTENT_LENGTH) {
+                BodyFraming::ContentLength
+            } else {
+                BodyFraming::CloseDelimited
+            };
             let body = resp.into_body().collect().await?.to_bytes();
             Ok::<_, hyper::Error>(Raw {
                 status,
                 content_type,
                 content_encoding,
                 content_range,
+                framing,
                 body,
             })
         };
