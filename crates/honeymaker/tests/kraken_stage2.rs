@@ -238,3 +238,294 @@ fn ticker_prices_are_the_first_pairs_bid_ask_and_last_trade() {
         Finished::Unreadable
     ));
 }
+
+use honeymaker::kraken::lookup::{ClientIdLookup, MAX_CLOSED_PAGES, Step};
+
+fn open(orders: Value) -> Value {
+    json!({ "error": [], "result": { "open": orders } })
+}
+fn closed(orders: Value, count: Value) -> Value {
+    json!({ "error": [], "result": { "closed": orders, "count": count } })
+}
+fn others(from: usize, n: usize) -> Value {
+    Value::Object(
+        (from..from + n)
+            .map(|i| (format!("OX{i}"), kraken_order(Some(&format!("other-{i}")))))
+            .collect(),
+    )
+}
+fn param(p: &BTreeMap<String, Param>, k: &str) -> Option<String> {
+    p.get(k).map(|v| match v {
+        Param::One(s) => s.clone(),
+        Param::Many(m) => m.join(","),
+    })
+}
+
+/// Drives the lookup over scripted bodies; returns the calls it made and how it ended.
+#[allow(clippy::type_complexity)] // Preserve the brief's scripted-call helper signature.
+fn run(
+    pages: Vec<Value>,
+) -> (
+    Vec<(String, Option<String>, Option<String>)>,
+    Step<BigDecimal>,
+) {
+    let mut l = ClientIdLookup::new("c-1", 1_727_690_400);
+    let mut pages = pages.into_iter();
+    let mut calls = vec![];
+    let mut step = l.first::<BigDecimal>();
+    loop {
+        match step {
+            Step::Call(op, p) => {
+                assert_eq!(
+                    param(&p, "cl_ord_id").as_deref(),
+                    Some("c-1"),
+                    "the filter goes to Kraken"
+                );
+                calls.push((op.to_string(), param(&p, "start"), param(&p, "ofs")));
+                // A shape error is how the client learns of an unreadable page: it becomes Ambiguous.
+                step = match l.feed::<BigDecimal>(
+                    &pages
+                        .next()
+                        .expect("lookup asked for more pages than scripted"),
+                ) {
+                    Ok(next) => next,
+                    Err(e) => return (calls, Step::Incomplete(format!("unreadable: {e:?}"))),
+                };
+            }
+            other => return (calls, other),
+        }
+    }
+}
+
+#[test]
+fn an_open_order_is_found_without_reading_closed_orders() {
+    let (calls, end) = run(vec![open(json!({ "O1": kraken_order(Some("c-1")) }))]);
+    assert!(matches!(end, Step::Found(o) if o.order_id == json!("O1")));
+    assert_eq!(calls, vec![("open_orders".into(), None, None)]);
+}
+
+#[test]
+fn a_closed_order_is_found_on_a_later_page_when_the_filter_is_ignored() {
+    let mut page2 = others(50, 9);
+    page2["O-MINE"] = kraken_order(Some("c-1"));
+    let (calls, end) = run(vec![
+        open(json!({})),
+        closed(others(0, 50), json!(60)),
+        closed(page2, json!(60)),
+    ]);
+    assert!(matches!(end, Step::Found(o) if o.order_id == json!("O-MINE")));
+    assert_eq!(
+        calls[1..],
+        [
+            (
+                "closed_orders".into(),
+                Some("1727690400".into()),
+                Some("0".into())
+            ),
+            (
+                "closed_orders".into(),
+                Some("1727690400".into()),
+                Some("50".into())
+            )
+        ]
+    );
+}
+
+#[test]
+fn absence_needs_every_closed_page() {
+    let (calls, end) = run(vec![
+        open(json!({})),
+        closed(others(0, 2), json!(3)),
+        closed(others(2, 1), json!(3)),
+    ]);
+    assert!(matches!(end, Step::Absent));
+    assert_eq!(calls.len(), 3);
+    let (_, end) = run(vec![open(json!({})), closed(json!({}), json!(0))]);
+    assert!(
+        matches!(end, Step::Absent),
+        "no orders at all, stated explicitly, is a complete answer"
+    );
+}
+
+#[test]
+fn absence_needs_every_distinct_closed_order_not_just_enough_rows() {
+    let order = |id: &str| (id.to_string(), kraken_order(Some(&format!("other-{id}"))));
+    let page = |ids: &[&str]| Value::Object(ids.iter().map(|&i| order(i)).collect());
+    // {A,B} then {B}, count 3: three rows served, two distinct orders, C never read.
+    let (calls, end) = run(vec![
+        open(json!({})),
+        closed(page(&["A", "B"]), json!(3)),
+        closed(page(&["B"]), json!(3)),
+    ]);
+    assert!(
+        matches!(end, Step::Incomplete(_)),
+        "never Absent with an order unread"
+    );
+    assert_eq!(calls.len(), 3);
+    // {A,B} then {B,C}: an overlap that does cover every order.
+    let (calls, end) = run(vec![
+        open(json!({})),
+        closed(page(&["A", "B"]), json!(3)),
+        closed(page(&["B", "C"]), json!(3)),
+    ]);
+    assert!(matches!(end, Step::Absent));
+    assert_eq!(
+        calls[2].2.as_deref(),
+        Some("2"),
+        "ofs stays the raw row offset"
+    );
+    // A count that shrinks between pages never lowers the bar (R22).
+    let (_, end) = run(vec![
+        open(json!({})),
+        closed(page(&["A", "B"]), json!(4)),
+        closed(page(&["C"]), json!(3)),
+        closed(json!({}), json!(3)),
+    ]);
+    assert!(
+        matches!(end, Step::Incomplete(_)),
+        "3 distinct orders against the 4 first reported"
+    );
+}
+
+#[test]
+fn a_missing_or_null_container_is_never_absence() {
+    // `{}` for OpenOrders, then an empty ClosedOrders: must not conclude "not placed".
+    let (calls, end) = run(vec![json!({}), closed(json!({}), json!(0))]);
+    assert!(matches!(end, Step::Incomplete(_)));
+    assert_eq!(calls.len(), 1, "stops at the unreadable OpenOrders answer");
+    let (_, end) = run(vec![open(json!(null)), closed(json!({}), json!(0))]);
+    assert!(matches!(end, Step::Incomplete(_)));
+    let (_, end) = run(vec![
+        open(json!({})),
+        json!({ "error": [], "result": { "count": 0 } }),
+    ]);
+    assert!(
+        matches!(end, Step::Incomplete(_)),
+        "`closed` missing with count 0"
+    );
+}
+
+#[test]
+fn an_order_with_another_or_no_client_id_is_not_a_match() {
+    let (_, end) = run(vec![
+        open(json!({ "O1": kraken_order(None), "O2": kraken_order(Some("c-10")) })),
+        closed(json!({}), json!(0)),
+    ]);
+    assert!(matches!(end, Step::Absent));
+}
+
+#[test]
+fn anything_short_of_a_complete_scan_is_never_absence() {
+    let (_, end) = run(vec![
+        open(json!({})),
+        closed(others(0, 2), json!(5)),
+        json!({ "error": ["EAPI:Rate limit exceeded"] }),
+    ]);
+    assert!(matches!(end, Step::Venue(e) if e == vec![json!("EAPI:Rate limit exceeded")]));
+    let (_, end) = run(vec![
+        open(json!({})),
+        closed(others(0, 2), json!(5)),
+        json!("<html>"),
+    ]);
+    assert!(matches!(end, Step::Unreadable));
+    let (_, end) = run(vec![
+        open(json!({})),
+        closed(others(0, 2), json!(5)),
+        closed(json!({}), json!(5)),
+    ]);
+    assert!(
+        matches!(end, Step::Incomplete(_)),
+        "an empty page before count"
+    );
+    for bad in [json!(null), json!("3"), json!(-1), json!(2.5)] {
+        let (_, end) = run(vec![open(json!({})), closed(json!({}), bad.clone())]);
+        assert!(matches!(end, Step::Incomplete(_)), "count {bad}");
+    }
+    let mut pages = vec![open(json!({}))];
+    pages.extend((0..MAX_CLOSED_PAGES as usize).map(|i| closed(others(i, 1), json!(1_000_000))));
+    let (calls, end) = run(pages);
+    assert!(matches!(end, Step::Incomplete(_)), "the page cap");
+    assert_eq!(calls.len(), 1 + MAX_CLOSED_PAGES as usize);
+}
+
+#[test]
+fn lookup_requests_never_bound_the_scan_with_end() {
+    let mut lookup = ClientIdLookup::new("c-1", 1_727_690_400);
+    let first = lookup.first::<BigDecimal>();
+    let second = lookup.feed::<BigDecimal>(&open(json!({}))).unwrap();
+    let third = lookup
+        .feed::<BigDecimal>(&closed(others(0, 1), json!(2)))
+        .unwrap();
+    for step in [first, second, third] {
+        let Step::Call(_, params) = step else {
+            panic!("expected a request");
+        };
+        assert!(!params.contains_key("end"));
+    }
+}
+
+#[test]
+fn lookup_propagates_container_shape_errors_on_both_endpoints() {
+    for key in ["open", "closed"] {
+        let mut bodies = vec![json!({}), json!({ "error": [] })];
+        for malformed in [json!(null), json!([]), json!("bad"), json!(1), json!(false)] {
+            bodies.push(json!({ "error": [], "result": malformed }));
+            bodies.push(json!({ "error": [], "result": { key: malformed, "count": 0 } }));
+        }
+        bodies.push(json!({ "error": [], "result": { "count": 0 } }));
+        for body in bodies {
+            let mut lookup = ClientIdLookup::new("c-1", 1_727_690_400);
+            if key == "closed" {
+                assert!(matches!(
+                    lookup.feed::<BigDecimal>(&open(json!({}))).unwrap(),
+                    Step::Call("closed_orders", _)
+                ));
+            }
+            assert!(lookup.feed::<BigDecimal>(&body).is_err(), "{key}: {body}");
+        }
+    }
+}
+
+#[test]
+fn a_growing_count_requires_the_additional_distinct_orders() {
+    let (calls, end) = run(vec![
+        open(json!({})),
+        closed(others(0, 1), json!(2)),
+        closed(others(1, 1), json!(3)),
+        closed(others(2, 1), json!(3)),
+    ]);
+    assert!(matches!(end, Step::Absent));
+    assert_eq!(calls.len(), 4);
+    assert_eq!(calls[3].2.as_deref(), Some("2"));
+}
+
+#[test]
+fn a_missing_closed_count_is_incomplete() {
+    let (_, end) = run(vec![
+        open(json!({})),
+        json!({ "error": [], "result": { "closed": {} } }),
+    ]);
+    assert!(matches!(end, Step::Incomplete(_)));
+}
+
+#[test]
+fn the_last_allowed_closed_page_can_complete_the_scan() {
+    for found in [false, true] {
+        let mut pages = vec![open(json!({}))];
+        pages.extend((0..MAX_CLOSED_PAGES as usize).map(|i| {
+            let orders = if found && i + 1 == MAX_CLOSED_PAGES as usize {
+                json!({ "O-MINE": kraken_order(Some("c-1")) })
+            } else {
+                others(i, 1)
+            };
+            closed(orders, json!(MAX_CLOSED_PAGES))
+        }));
+        let (calls, end) = run(pages);
+        if found {
+            assert!(matches!(end, Step::Found(o) if o.order_id == json!("O-MINE")));
+        } else {
+            assert!(matches!(end, Step::Absent));
+        }
+        assert_eq!(calls.len(), 1 + MAX_CLOSED_PAGES as usize);
+    }
+}
