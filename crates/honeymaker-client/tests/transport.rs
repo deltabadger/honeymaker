@@ -88,6 +88,23 @@ async fn an_untrusted_certificate_is_a_tls_failure_that_sent_nothing() {
     );
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn a_localhost_url_reaches_an_ipv4_only_listener() {
+    let pki = pki();
+    let t = target(
+        Tls::Trusted,
+        Act::Reply(http("200 OK", "application/json", OK_JSON)),
+        &pki,
+    )
+    .await;
+    assert_eq!(t.addr.ip(), std::net::Ipv4Addr::LOCALHOST);
+    let raw = send(&t.https_localhost(), None, &pki).await.unwrap();
+    assert_eq!(raw.status, 200);
+    assert_eq!(raw.body.as_ref(), OK_JSON.as_bytes());
+    assert_eq!(t.seen.conns(), 1);
+    assert_eq!(t.seen.heads().len(), 1);
+}
+
 // ---- the exchange ----
 
 #[tokio::test(flavor = "current_thread")]
