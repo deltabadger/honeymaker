@@ -6,7 +6,8 @@ use std::borrow::Cow;
 
 pub enum Finished<T> {
     Ok(T),
-    Venue,
+    /// Kraken answered with a truthy element in `error`: the whole array, verbatim.
+    Venue(Vec<Value>),
     Unreadable,
 }
 
@@ -30,7 +31,7 @@ pub fn dec<D: Num>(v: Option<&Value>) -> Result<D, NormError<D::Error>> {
     D::parse_to_s(v.unwrap_or(&Value::Null)).map_err(NormError::Num)
 }
 
-/// Not a Hash → unreadable (Task 5); `error.is_a?(Array) && error.any?` → venue.
+/// Not a Hash → unreadable; `error.is_a?(Array) && error.any?` → venue, carrying the array.
 fn envelope(data: &Value) -> Result<&Map<String, Value>, Finished<()>> {
     let Some(obj) = data.as_object() else {
         return Err(Finished::Unreadable);
@@ -38,7 +39,7 @@ fn envelope(data: &Value) -> Result<&Map<String, Value>, Finished<()>> {
     if let Some(Value::Array(e)) = obj.get("error")
         && e.iter().any(|x| truthy(Some(x)))
     {
-        return Err(Finished::Venue);
+        return Err(Finished::Venue(e.clone()));
     }
     Ok(obj)
 }
@@ -47,7 +48,7 @@ macro_rules! envelope_or_return {
     ($d:expr) => {
         match envelope($d) {
             Ok(o) => o,
-            Err(Finished::Venue) => return Ok(Finished::Venue),
+            Err(Finished::Venue(e)) => return Ok(Finished::Venue(e)),
             Err(_) => return Ok(Finished::Unreadable),
         }
     };
@@ -302,7 +303,7 @@ pub fn tickers<D: Num>(data: &Value) -> R<Vec<Ticker>, D> {
     if let Some(Value::Array(e)) = obj.get("error")
         && e.iter().any(|x| truthy(Some(x)))
     {
-        return Ok(Finished::Venue);
+        return Ok(Finished::Venue(e.clone()));
     }
     // Unlike the client, the exchange calls each_with_object without a fallback.
     if !matches!(obj.get("result"), Some(Value::Object(_) | Value::Array(_))) {
@@ -374,7 +375,7 @@ pub fn bid_ask<D: Num>(data: &Value) -> R<(D, D), D> {
     if let Some(Value::Array(e)) = obj.get("error")
         && e.iter().any(|x| truthy(Some(x)))
     {
-        return Ok(Finished::Venue);
+        return Ok(Finished::Venue(e.clone()));
     }
     let first = match obj.get("result") {
         Some(Value::Object(m)) => m.values().next(),
