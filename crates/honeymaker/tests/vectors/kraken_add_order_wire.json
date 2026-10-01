@@ -1,0 +1,74 @@
+[
+  {
+    "args": {
+      "ordertype": "market",
+      "type": "buy",
+      "volume": "0.0012",
+      "pair": "XBTEUR",
+      "oflags": [
+        "viqc"
+      ],
+      "cl_ord_id": "6f1c1a52-7c8e-4d0e-9a57-0b6f0f1d2e3a",
+      "deadline": "2026-09-30T12:00:10.000Z"
+    },
+    "nonce": 1727000000000001,
+    "api_key": "key",
+    "api_secret": "dGVzdF9zZWNyZXRfa2V5XzEyMzQ1Njc4OTAxMjM0NTY=",
+    "body": "nonce=1727000000000001&ordertype=market&type=buy&volume=0.0012&pair=XBTEUR&cl_ord_id=6f1c1a52-7c8e-4d0e-9a57-0b6f0f1d2e3a&oflags=viqc&deadline=2026-09-30T12%3A00%3A10.000Z",
+    "headers": {
+      "API-Key": "key",
+      "API-Sign": "WIj+HLMKiN3JisS0SDtgnfgkztRD9vRgVUoeuKogUr/BVsObdxT8KBIMJ87j9x6P5y0cdyrkcjIzm6F1LciAVA==",
+      "Accept": "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+      "User-Agent": "Honeymaker Ruby"
+    }
+  },
+  {
+    "args": {
+      "ordertype": "limit",
+      "type": "buy",
+      "volume": "0.00119",
+      "pair": "XBTEUR",
+      "price": "49870.1",
+      "oflags": [],
+      "cl_ord_id": "0d9e2c1b-2f4a-4b8c-8d1e-5a6b7c8d9e0f",
+      "deadline": "2026-09-30T12:00:10.123Z"
+    },
+    "nonce": 1727000000000001,
+    "api_key": "key",
+    "api_secret": "dGVzdF9zZWNyZXRfa2V5XzEyMzQ1Njc4OTAxMjM0NTY=",
+    "body": "nonce=1727000000000001&ordertype=limit&type=buy&volume=0.00119&pair=XBTEUR&cl_ord_id=0d9e2c1b-2f4a-4b8c-8d1e-5a6b7c8d9e0f&price=49870.1&deadline=2026-09-30T12%3A00%3A10.123Z",
+    "headers": {
+      "API-Key": "key",
+      "API-Sign": "szaVyZ0WTnm6BQtuK3TWp6/52uxNxx6U3OCugNj5+pXBf8nPB7qf1dg9wpxWURUf962W+ikCiAv2zJqYijbnhg==",
+      "Accept": "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+      "User-Agent": "Honeymaker Ruby"
+    }
+  },
+  {
+    "args": {
+      "ordertype": "market",
+      "type": "buy",
+      "volume": "60",
+      "pair": "XBTEUR",
+      "oflags": [
+        "viqc"
+      ],
+      "cl_ord_id": "6f1c1a52-7c8e-4d0e-9a57-0b6f0f1d2e3a",
+      "deadline": "2026-09-30T12:00:10.000Z",
+      "validate": true
+    },
+    "nonce": 1727000000000001,
+    "api_key": "key",
+    "api_secret": "dGVzdF9zZWNyZXRfa2V5XzEyMzQ1Njc4OTAxMjM0NTY=",
+    "body": "nonce=1727000000000001&ordertype=market&type=buy&volume=60&pair=XBTEUR&cl_ord_id=6f1c1a52-7c8e-4d0e-9a57-0b6f0f1d2e3a&oflags=viqc&deadline=2026-09-30T12%3A00%3A10.000Z&validate=true",
+    "headers": {
+      "API-Key": "key",
+      "API-Sign": "us2T6Ya8LlwwoSU6xZFflnv5yBe7Qvee7Dk4UoHLTRYzIZeDJ/mJo1Tm1Mm4hmnvW9wRuWSvaMD/XlLOei+A5g==",
+      "Accept": "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+      "User-Agent": "Honeymaker Ruby"
+    }
+  }
+]
