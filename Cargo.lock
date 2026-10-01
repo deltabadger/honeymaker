@@ -170,7 +170,7 @@ dependencies = [
 
 [[package]]
 name = "honeymaker"
-version = "0.12.2"
+version = "0.12.3"
 dependencies = [
  "base64",
  "bigdecimal",
@@ -183,7 +183,7 @@ dependencies = [
 
 [[package]]
 name = "honeymaker_native"
-version = "0.12.2"
+version = "0.12.3"
 dependencies = [
  "honeymaker",
  "magnus",
