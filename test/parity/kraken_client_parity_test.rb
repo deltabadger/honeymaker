@@ -157,6 +157,14 @@ class KrakenClientParityTest < Minitest::Test
     assert_parity([p1]) { |c| c.closed_orders_from_trades(order_ids: []) }
   end
 
+  def test_closed_orders_from_trades_counts_a_trade_seen_on_two_pages_once
+    t1 = { id: "T1", o: "O1", vol: "0.1", cost: "5000", time: 1_700_000_000 }
+    t2 = { id: "T2", o: "O1", vol: "0.2", cost: "10001", time: 1_700_000_001 }
+    p1 = page([t1, t2], 3)
+    p2 = page([t2], 3)
+    assert_parity([p1, p2]) { |c| c.closed_orders_from_trades(order_ids: %w[O1], start: 1_699_000_000) }
+  end
+
   def test_aggregate_edges
     [{ "type" => false }, { "type" => 1 }, { "type" => nil }, { "ordertype" => 5 }].each do |over|
       bad_page = page([{ id: "T1", o: "O1", vol: "1", cost: "2", time: 1 }], 1)
