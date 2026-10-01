@@ -1,5 +1,7 @@
 [toolchain]
 channel = "1.94.0"
+# CI runs clippy -D warnings and fmt checks on the pinned toolchain.
+components = ["clippy", "rustfmt"]
 # The cross-gem containers honour this pin, so std for every platform-gem target must come with it.
 targets = [
   "x86_64-unknown-linux-gnu",
