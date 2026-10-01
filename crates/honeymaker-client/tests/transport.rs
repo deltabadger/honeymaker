@@ -628,7 +628,6 @@ async fn encoded_response(
     use flate2::{Compression, write::GzEncoder};
     use honeymaker_client::transport::BodyFraming;
     use std::io::Write;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
     encoder.write_all(OK_JSON.as_bytes()).unwrap();
     let mut body = encoder.finish().unwrap();
@@ -648,6 +647,11 @@ async fn encoded_response(
     if framing == BodyFraming::Chunked {
         wire.extend(b"\r\n0\r\n\r\n");
     }
+    wire_response(wire).await
+}
+
+async fn wire_response(wire: Vec<u8>) -> Transport {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     tokio::spawn(async move {
@@ -735,4 +739,90 @@ async fn a_non_chunked_transfer_encoding_is_close_delimited() {
     let raw = send(&t.http(), None, &pki).await.unwrap();
     assert_eq!(raw.framing, BodyFraming::CloseDelimited);
     assert_eq!(&raw.body[..], b"raw!");
+}
+
+async fn header_response(headers: &[u8], body: &[u8]) -> Transport {
+    let mut wire = format!(
+        "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: {}\r\n",
+        body.len()
+    )
+    .into_bytes();
+    wire.extend(headers);
+    wire.extend(b"\r\n");
+    wire.extend(body);
+    wire_response(wire).await
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn repeated_gzip_headers_leave_the_body_encoded_and_fail_json_parsing() {
+    use flate2::{Compression, write::GzEncoder};
+    use honeymaker_client::transport::{Reply, decode};
+    use std::io::Write;
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(OK_JSON.as_bytes()).unwrap();
+    let body = encoder.finish().unwrap();
+    let headers =
+        b"Content-Type: application/json\r\nContent-Encoding: gzip\r\nContent-Encoding: gzip\r\n";
+    let raw = header_response(headers, &body)
+        .await
+        .send(&post())
+        .await
+        .unwrap();
+    assert_eq!(raw.content_encoding.as_deref(), Some("gzip, gzip"));
+    assert_eq!(&decode(raw).unwrap().body[..], body);
+    assert_eq!(
+        header_response(headers, &body)
+            .await
+            .request(&post())
+            .await
+            .unwrap(),
+        Reply::Status {
+            status: 200,
+            message: String::from_utf8_lossy(&body).into_owned()
+        }
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn repeated_content_types_are_joined_before_matching_json() {
+    use honeymaker_client::transport::Reply;
+    let headers = b"Content-Type: text/plain\r\nContent-Type: application/json\r\n";
+    let raw = header_response(headers, OK_JSON.as_bytes())
+        .await
+        .send(&post())
+        .await
+        .unwrap();
+    assert_eq!(
+        raw.content_type.as_deref(),
+        Some("text/plain, application/json")
+    );
+    assert_eq!(
+        header_response(headers, OK_JSON.as_bytes())
+            .await
+            .request(&post())
+            .await
+            .unwrap(),
+        Reply::Parsed(serde_json::json!({"error": [], "result": {"a": 1}}))
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn non_ascii_header_values_are_retained_with_lossy_decoding() {
+    use honeymaker_client::transport::Reply;
+    let headers = b"Content-Type: application/\xff+json\r\nContent-Encoding: \xfe\r\n";
+    let raw = header_response(headers, OK_JSON.as_bytes())
+        .await
+        .send(&post())
+        .await
+        .unwrap();
+    assert_eq!(raw.content_type.as_deref(), Some("application/�+json"));
+    assert_eq!(raw.content_encoding.as_deref(), Some("�"));
+    assert_eq!(
+        header_response(headers, OK_JSON.as_bytes())
+            .await
+            .request(&post())
+            .await
+            .unwrap(),
+        Reply::Parsed(serde_json::json!({"error": [], "result": {"a": 1}}))
+    );
 }
