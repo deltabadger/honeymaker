@@ -5,10 +5,20 @@ use sha2::{Digest, Sha256, Sha512};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Credentials {
     pub api_key: String,
     pub api_secret: String,
+}
+
+/// The secret never reaches a log or a panic message.
+impl std::fmt::Debug for Credentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Credentials")
+            .field("api_key", &self.api_key)
+            .field("api_secret", &"<redacted>")
+            .finish()
+    }
 }
 
 impl Credentials {

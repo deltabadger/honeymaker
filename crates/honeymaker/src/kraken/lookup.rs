@@ -87,10 +87,13 @@ impl ClientIdLookup {
             .iter()
             .map(|o| semantics::to_s(&o.order_id).unwrap_or_else(|_| o.order_id.to_string()))
             .collect();
+        // Ruby's `echo.to_s == cl_ord_id`: a numeric echo matches its text; string_eq keeps the
+        // binary-string form (to_s has no answer for it) matching too.
         if let Some(o) = orders.into_iter().find(|o| {
-            o.cl_ord_id
-                .as_ref()
-                .is_some_and(|c| string_eq(c, &self.cl_ord_id))
+            o.cl_ord_id.as_ref().is_some_and(|c| {
+                string_eq(c, &self.cl_ord_id)
+                    || semantics::to_s(c).is_ok_and(|t| t == self.cl_ord_id)
+            })
         }) {
             return Ok(Step::Found(o));
         }

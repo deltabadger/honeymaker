@@ -875,11 +875,33 @@ async fn fills_fail_rather_than_return_a_partial_scan() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn orders_of_no_txids_is_empty_without_a_request() {
+    let k = kraken(vec![]).await;
+    assert_eq!(client(&k, Some(creds())).orders(&[]).await, Ok(vec![]));
+    assert!(k.requests().is_empty());
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn balance_is_rails_free_balance_of_the_asset() {
     let k = kraken(vec![("/0/private/BalanceEx", vec![kok(json!({ "error": [], "result": { "ZEUR": { "balance": "1000.5", "hold_trade": "0.5" } } }))])]).await;
     let c = client(&k, Some(creds()));
     assert_eq!(c.balance("EUR").await, Ok(dec("1000")));
     assert_eq!(c.balance("USD").await, Ok(dec("0")));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn balance_without_hold_trade_is_ambiguous_not_the_whole_balance() {
+    let k = kraken(vec![(
+        "/0/private/BalanceEx",
+        vec![kok(
+            json!({ "error": [], "result": { "ZEUR": { "balance": "1000.5" } } }),
+        )],
+    )])
+    .await;
+    assert!(matches!(
+        client(&k, Some(creds())).balance("EUR").await,
+        Err(VenueError::Ambiguous(_))
+    ));
 }
 
 #[tokio::test(flavor = "current_thread")]

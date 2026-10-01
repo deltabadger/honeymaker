@@ -65,6 +65,10 @@ fn order(a: &Value) -> NewOrder {
 }
 
 async fn run(req: &Value) -> Value {
+    // A live AddOrder only ever runs with validate=true: a real placement needs a test double's URL.
+    if req["call"] == "add_order" && !req["base_url"].is_string() {
+        return json!({ "class": "refused", "message": "add_order needs an explicit base_url (live checks use add_order_validate)" });
+    }
     let configured = Instant::now();
     if let Some(n) = req["fixed_nonce"].as_u64() {
         honeymaker::kraken::sign::set_fixed_nonce(Some(n));

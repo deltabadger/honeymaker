@@ -106,7 +106,8 @@ pub struct OrderState {
     pub amount_exec: BigDecimal,
     pub quote_amount_exec: BigDecimal,
     pub limit: bool,
-    /// `descr.type` is "sell" (parse_order_data downcases it); for a trade aggregate, its `type`.
+    /// `descr.type` is "sell" (parse_order_data downcases it); for a trade aggregate, its `type`
+    /// (a trade with no `type` gives false).
     pub sell: bool,
 }
 
@@ -136,6 +137,8 @@ impl Default for Config {
     }
 }
 
+/// Private calls must be serial per API key (see `call`): concurrent ones can reach Kraken out of
+/// nonce order and be refused with `EAPI:Invalid nonce`.
 pub struct Client {
     transport: Transport,
     credentials: Option<Credentials>,
@@ -319,7 +322,8 @@ impl Client {
     }
 
     /// One Kraken call: the core lays it out and signs it (nonce included); the transport sends it
-    /// once, on its own connection.
+    /// once, on its own connection. Private calls must be serial per key: the nonce is taken before
+    /// connecting, so concurrent calls can arrive out of order and get `EAPI:Invalid nonce`.
     async fn call(&self, op: &str, params: BTreeMap<String, Param>) -> Result<Value, VenueError> {
         let built = requests::build(op, &params, self.credentials.as_ref())
             .expect("a layout exists for every op this client calls");
@@ -407,8 +411,12 @@ impl Client {
         finished(normalize::add_order::<BigDecimal>(&data).map_err(unreadable)?).map(|_| ())
     }
 
-    /// QueryOrders (the caller batches ≤ 50); ids Kraken does not report are absent.
+    /// QueryOrders (the caller batches ≤ 50); ids Kraken does not report are absent. No ids → empty,
+    /// with no request (Rails' each_slice yields nothing).
     pub async fn orders(&self, txids: &[String]) -> Result<Vec<OrderState>, VenueError> {
+        if txids.is_empty() {
+            return Ok(vec![]);
+        }
         let params = BTreeMap::from([
             ("txid".to_string(), one(&txids.join(","))),
             ("consolidate_taker".to_string(), one("true")),
@@ -423,6 +431,11 @@ impl Client {
     }
 
     /// OpenOrders, then every ClosedOrders page since `since`. `Ok(None)` only after a complete scan.
+    ///
+    /// Plan 2b: do not clear an intent on `Ok(None)` until the private live check
+    /// (script/parity/kraken_client_live.rb with a key) has confirmed Kraken's `cl_ord_id` filter,
+    /// `count` and `cl_ord_id` echo on both OpenOrders and ClosedOrders. Until then, absence rests
+    /// on Kraken's docs, not on an observed answer.
     pub async fn order_by_client_id(
         &self,
         cl_ord_id: &str,
@@ -448,6 +461,10 @@ impl Client {
 
 impl Client {
     /// TradesHistory since `since`, aggregated per order (Exchanges::Kraken#recover_missing_from_trades).
+    ///
+    /// For the Plan 2b author: `price` is the aggregate's cost / vol kept to 34 significant digits;
+    /// recompute it with `ruby::BigDec::div` (R12) where Rails' value matters. Rails passes `since − 1 h`
+    /// to this scan, so the caller subtracts the hour. A trade with no `type` gives `sell = false`.
     pub async fn fills_from_trades(
         &self,
         txids: &[String],
