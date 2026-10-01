@@ -802,3 +802,126 @@ async fn incomplete_or_unreadable_lookups_never_report_absence() {
         ));
     }
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn fills_are_trades_history_aggregated_per_order_since_the_given_time() {
+    let t = |o: &str, ty: &str, vol: &str, cost: &str| json!({ "ordertxid": o, "vol": vol, "cost": cost, "fee": "0.1", "type": ty, "ordertype": "market", "pair": "XXBTZEUR", "time": 1.5 });
+    let k = kraken(vec![("/0/private/TradesHistory", vec![
+        kok(json!({ "error": [], "result": { "trades": { "T1": t("OTX-5", "buy", "0.0006", "30.0"), "T2": t("OTX-8", "sell", "1", "2") }, "count": 3 } })),
+        kok(json!({ "error": [], "result": { "trades": { "T3": t("OTX-5", "buy", "0.0006", "30.012") }, "count": 3 } })),
+    ])]).await;
+    let fills = client(&k, Some(creds()))
+        .fills_from_trades(
+            &["OTX-5".into(), "OTX-8".into()],
+            at("2026-09-30T10:00:00Z"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        fills[0],
+        OrderState {
+            txid: "OTX-5".into(),
+            status: OrderStatus::Closed,
+            price: Some(dec("50010")),
+            amount: None,
+            quote_amount: None,
+            amount_exec: dec("0.0012"),
+            quote_amount_exec: dec("60.012"),
+            limit: false,
+            sell: false
+        }
+    );
+    assert!(
+        fills[1].sell && fills[1].txid == "OTX-8",
+        "a sell's trades aggregate as a sell"
+    );
+    let reqs = k.requests();
+    assert!(
+        reqs[0].body.ends_with("&start=1790762400&ofs=0")
+            && reqs[1].body.ends_with("&start=1790762400&ofs=2")
+    );
+    assert!(
+        reqs.iter().all(|r| !r.body.contains("end=")),
+        "no `end`: it could filter out fills on clock skew (R22)"
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn fills_fail_rather_than_return_a_partial_scan() {
+    let t = json!({ "ordertxid": "OTX-9", "vol": "1", "cost": "1", "fee": "0", "type": "buy", "ordertype": "market" });
+    // Page cap: every page has one unrelated trade and Kraken says there are a thousand.
+    let pages: Vec<KReply> = (0..TRADES_MAX_PAGES).map(|i| kok(json!({ "error": [], "result": { "trades": { format!("T{i}"): t.clone() }, "count": 1000 } }))).collect();
+    let k = kraken(vec![("/0/private/TradesHistory", pages)]).await;
+    assert!(matches!(
+        client(&k, Some(creds()))
+            .fills_from_trades(&["OTX-5".into()], at("2026-09-30T10:00:00Z"))
+            .await,
+        Err(VenueError::Ambiguous(_))
+    ));
+    assert_eq!(k.requests().len(), TRADES_MAX_PAGES as usize);
+    // No count, and a premature empty page.
+    for page in [
+        json!({ "error": [], "result": { "trades": { "T1": t.clone() } } }),
+        json!({ "error": [], "result": { "trades": {}, "count": 5 } }),
+    ] {
+        let k = kraken(vec![("/0/private/TradesHistory", vec![kok(page)])]).await;
+        assert!(
+            client(&k, Some(creds()))
+                .fills_from_trades(&["OTX-5".into()], at("2026-09-30T10:00:00Z"))
+                .await
+                .is_err()
+        );
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn balance_is_rails_free_balance_of_the_asset() {
+    let k = kraken(vec![("/0/private/BalanceEx", vec![kok(json!({ "error": [], "result": { "ZEUR": { "balance": "1000.5", "hold_trade": "0.5" } } }))])]).await;
+    let c = client(&k, Some(creds()));
+    assert_eq!(c.balance("EUR").await, Ok(dec("1000")));
+    assert_eq!(c.balance("USD").await, Ok(dec("0")));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn without_credentials_a_private_call_goes_unsigned_and_kraken_refuses_it() {
+    let k = kraken(vec![(
+        "/0/private/BalanceEx",
+        vec![kok(json!({ "error": ["EAPI:Invalid key"] }))],
+    )])
+    .await;
+    assert_eq!(
+        client(&k, None).balance("EUR").await,
+        Err(VenueError::Rejected(vec!["EAPI:Invalid key".into()]))
+    );
+    assert_eq!(k.requests()[0].header("api-key"), None);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn clients_for_one_key_share_one_increasing_nonce_sequence() {
+    let _g = NONCE.lock().await;
+    let k = kraken(vec![(
+        "/0/private/BalanceEx",
+        vec![kok(json!({ "error": [], "result": {} }))],
+    )])
+    .await;
+    let (a, b) = (client(&k, Some(creds())), client(&k, Some(creds())));
+    for _ in 0..5 {
+        a.balance("EUR").await.unwrap();
+        b.balance("EUR").await.unwrap();
+    }
+    let nonces: Vec<u64> = k
+        .requests()
+        .iter()
+        .map(|r| {
+            r.body
+                .strip_prefix("nonce=")
+                .unwrap()
+                .split('&')
+                .next()
+                .unwrap()
+                .parse()
+                .unwrap()
+        })
+        .collect();
+    assert!(nonces.windows(2).all(|w| w[0] < w[1]), "{nonces:?}");
+}

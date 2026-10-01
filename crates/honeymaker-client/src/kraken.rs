@@ -47,6 +47,7 @@ use honeymaker::encode::www_form;
 use honeymaker::kraken::lookup::{ClientIdLookup, Step};
 use honeymaker::kraken::normalize::{self, Finished, NormalizedOrder};
 use honeymaker::kraken::requests::{self, Method, Param};
+use honeymaker::kraken::trades::{TradesPager, TradesStep};
 use honeymaker::num::NormError;
 use honeymaker::{OrderStatus as CoreStatus, OrderType, semantics};
 use std::collections::BTreeMap;
@@ -56,6 +57,9 @@ pub use honeymaker::kraken::sign::Credentials;
 
 pub const DEFAULT_URL: &str = "https://api.kraken.com";
 pub const DEFAULT_USER_AGENT: &str = "Honeymaker Ruby";
+
+/// Honeymaker::Clients::Kraken#closed_orders_from_trades's default.
+pub const TRADES_MAX_PAGES: u32 = 20;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Prices {
@@ -439,5 +443,55 @@ impl Client {
                 Step::Incomplete(m) => return Err(VenueError::Ambiguous(m)),
             };
         }
+    }
+}
+
+impl Client {
+    /// TradesHistory since `since`, aggregated per order (Exchanges::Kraken#recover_missing_from_trades).
+    pub async fn fills_from_trades(
+        &self,
+        txids: &[String],
+        since: DateTime<Utc>,
+    ) -> Result<Vec<OrderState>, VenueError> {
+        // No `end` (R22): completeness rests on distinct-id coverage, which fails closed on churn.
+        let mut pager = TradesPager::new(txids.to_vec(), Some(since.timestamp()), TRADES_MAX_PAGES);
+        let mut step = pager.start::<BigDecimal>().map_err(unreadable)?;
+        loop {
+            step = match step {
+                TradesStep::Call(params) => {
+                    let data = self.call("get_trades_history", params).await?;
+                    pager.feed::<BigDecimal>(&data).map_err(unreadable)?
+                }
+                TradesStep::Done(by_order) => {
+                    return Ok(by_order
+                        .into_iter()
+                        .map(|(txid, a)| OrderState {
+                            txid: text(&txid),
+                            status: OrderStatus::Closed,
+                            price: a.price,
+                            amount: None,
+                            quote_amount: None,
+                            amount_exec: a.vol,
+                            quote_amount_exec: a.cost,
+                            limit: a.order_type == OrderType::Limit,
+                            sell: a
+                                .side
+                                .as_ref()
+                                .is_some_and(|s| semantics::string_eq(s, "sell")),
+                        })
+                        .collect());
+                }
+                TradesStep::Venue(e) => return Err(rejected(e)),
+                TradesStep::Unreadable => return Err(VenueError::Ambiguous(UNREADABLE.into())),
+                // Strict (review ruling 2): an incomplete scan is never a partial answer.
+                TradesStep::Incomplete(m) => return Err(VenueError::Ambiguous(m)),
+            };
+        }
+    }
+
+    /// Free balance of an asset (Rails' rule, Ruling R9); absent → 0.
+    pub async fn balance(&self, asset_symbol: &str) -> Result<BigDecimal, VenueError> {
+        let data = self.call("get_extended_balance", BTreeMap::new()).await?;
+        finished(normalize::free_balance::<BigDecimal>(&data, asset_symbol).map_err(unreadable)?)
     }
 }

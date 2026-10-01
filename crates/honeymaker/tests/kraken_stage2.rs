@@ -529,3 +529,28 @@ fn the_last_allowed_closed_page_can_complete_the_scan() {
         assert_eq!(calls.len(), 1 + MAX_CLOSED_PAGES as usize);
     }
 }
+
+#[test]
+fn free_balance_follows_rails_last_entry_wins_rule() {
+    let fb =
+        |body: Value, sym: &str| ok(normalize::free_balance::<BigDecimal>(&body, sym).unwrap());
+    let body = json!({ "error": [], "result": { "ZEUR": { "balance": "1000.5", "hold_trade": "0.5" }, "XXBT": { "balance": "0.01", "hold_trade": "0" } } });
+    assert_eq!(fb(body.clone(), "EUR"), dec("1000"));
+    assert_eq!(fb(body.clone(), "XBT"), dec("0.01"));
+    assert_eq!(
+        fb(body, "USD"),
+        dec("0"),
+        "absent: Rails' {{ free: 0 }} default"
+    );
+    // Rails assigns balances[asset.id] per entry: a later EUR.HOLD replaces ZEUR, zeros included.
+    let later = json!({ "error": [], "result": { "ZEUR": { "balance": "100", "hold_trade": "0" }, "EUR.HOLD": { "balance": "0", "hold_trade": "0" } } });
+    assert_eq!(fb(later, "EUR"), dec("0"));
+    assert_eq!(
+        fb(
+            json!({ "error": [], "result": { "ZUSD": { "balance": "5" } } }),
+            "USD"
+        ),
+        dec("5"),
+        "no hold_trade"
+    );
+}

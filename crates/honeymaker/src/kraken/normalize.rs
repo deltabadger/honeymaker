@@ -146,6 +146,37 @@ pub fn balances<D: Num>(data: &Value) -> R<Vec<KrakenBalance<D>>, D> {
     Ok(Finished::Ok(out))
 }
 
+/// deltabadger's Exchanges::Kraken#get_balances for one asset: each code is split at "." and
+/// mapped (ZEUR → EUR, XXBT → XBT); free = balance − hold_trade; a later entry for the same asset
+/// replaces an earlier one (Hash assignment), zeros included; an absent asset is 0.
+pub fn free_balance<D: Num>(data: &Value, symbol: &str) -> R<D, D> {
+    let obj = envelope_or_return!(data);
+    let mut free = D::parse("0").map_err(NormError::Num)?;
+    for (code, balance) in result_entries(obj)? {
+        let Some(code) = code.as_str() else {
+            return Err(format!("asset code: {code}").into());
+        };
+        let base = code.split('.').next().unwrap_or(code);
+        let name = ASSET_MAP
+            .iter()
+            .find(|(k, _)| *k == base)
+            .map(|(_, v)| *v)
+            .unwrap_or(base);
+        if name != symbol {
+            continue;
+        }
+        let b = string_fields::<D>(balance, &["balance", "hold_trade"])?;
+        let total: D = dec(b.get("balance"))?;
+        let hold = b
+            .get("hold_trade")
+            .filter(|v| truthy(Some(v)))
+            .cloned()
+            .unwrap_or(Value::String("0".into()));
+        free = total.sub(&dec::<D>(Some(&hold))?).map_err(NormError::Num)?;
+    }
+    Ok(Finished::Ok(free))
+}
+
 pub struct NormalizedOrder<D> {
     pub order_id: Value,
     pub status: OrderStatus,
