@@ -148,6 +148,7 @@ module Honeymaker
         return Result::Success.new({}) if wanted.empty?
 
         by_order = Hash.new { |h, k| h[k] = [] }
+        seen = {}
         offset = 0
         pages = 0
         loop do
@@ -161,7 +162,11 @@ module Honeymaker
           trades = result.data.dig("result", "trades") || {}
           break if trades.empty?
 
-          trades.each_value do |t|
+          trades.each_pair do |trade_id, t|
+            # Offset paging over a list that grows at the top can serve a trade twice: count it once.
+            next if seen.key?(trade_id)
+
+            seen[trade_id] = true
             otxid = t["ordertxid"]
             by_order[otxid] << t if wanted.include?(otxid)
           end

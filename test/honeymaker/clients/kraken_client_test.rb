@@ -223,6 +223,21 @@ class Honeymaker::Clients::KrakenTest < Minitest::Test
     assert_equal BigDecimal("0.00016557"), agg[:amount_exec]
   end
 
+  # A trade that lands at the top of TradesHistory between two page reads pushes TID-2 from page 1
+  # onto page 2. Offset paging then serves TID-2 twice; it must be counted once.
+  def test_closed_orders_from_trades_counts_a_trade_seen_on_two_pages_once
+    t = { "ordertxid" => "OABC", "pair" => "XXBTZUSD", "type" => "buy", "ordertype" => "market",
+          "cost" => "6.0", "vol" => "0.0001", "fee" => "0.01", "time" => 1_700_000_000.0 }
+    p1 = { "error" => [], "result" => { "count" => 3, "trades" => { "TID-1" => t, "TID-2" => t } } }
+    p2 = { "error" => [], "result" => { "count" => 3, "trades" => { "TID-2" => t } } }
+    @client.stubs(:get_trades_history).returns(Honeymaker::Result::Success.new(p1), Honeymaker::Result::Success.new(p2))
+    agg = @client.closed_orders_from_trades(order_ids: ["OABC"], start: 1).data["OABC"]
+    assert_equal BigDecimal("0.0002"), agg[:amount_exec]
+    assert_equal BigDecimal("12.0"), agg[:quote_amount_exec]
+    assert_equal BigDecimal("0.02"), agg[:fee]
+    assert_equal 2, agg[:trade_count]
+  end
+
   private
 
   def assert_strictly_increasing(values)
