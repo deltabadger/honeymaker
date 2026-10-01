@@ -8,7 +8,10 @@ pub const UNREADABLE: &str = "Kraken: unreadable response";
 #[derive(Clone, Debug, PartialEq)]
 pub enum VenueError {
     /// Kraken answered and refused: its `error` array verbatim, or an HTTP answer Rails treats as
-    /// definitive (e.g. 4xx). Classifying the strings (throttle, transient…) is the caller's job.
+    /// definitive (e.g. 4xx). `add_order` applies Rails' placement rules via `placement()`:
+    /// transient/network/HTTP 5xx strings become `Ambiguous`; recvWindow and definitive refusals
+    /// remain `Rejected`. Every other call returns Kraken's error array as `Rejected`, leaving
+    /// interpretation to the caller.
     Rejected(Vec<String>),
     /// The request may have reached Kraken.
     Ambiguous(String),
@@ -16,8 +19,11 @@ pub enum VenueError {
     Transient(String),
 }
 
-/// Exchange#ambiguous_placement_error? without its text rules (those stay with the caller, over
-/// `Rejected` strings): a transport failure is decided by its cause alone; an HTTP answer by its
+/// The transport/status part of Exchange#ambiguous_placement_error?: `add_order` additionally
+/// applies Rails' text rules via `placement()` (transient/network/HTTP 5xx → `Ambiguous`;
+/// recvWindow and definitive refusals → `Rejected`). Every other call returns Kraken's error
+/// array as `Rejected` and leaves interpretation to the caller.
+/// A transport failure is decided by its cause alone; an HTTP answer by its
 /// status (≥ 500 or 2xx: ambiguous; anything else: a definitive rejection); a 2xx body that is
 /// not a JSON object is unreadable, hence ambiguous.
 #[doc(hidden)]
@@ -391,6 +397,7 @@ impl Client {
     }
 
     /// AddOrder with validate=true: Kraken checks the signed order without placing it (live checks).
+    /// Deliberately skips placement rules because `validate=true` never places an order.
     pub async fn add_order_validate(&self, order: &NewOrder) -> Result<(), VenueError> {
         let data = self.call("add_order", order_params(order, true)).await?;
         finished(normalize::add_order::<BigDecimal>(&data).map_err(unreadable)?).map(|_| ())
