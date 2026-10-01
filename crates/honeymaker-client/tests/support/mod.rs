@@ -424,3 +424,127 @@ pub async fn proxy(act: ProxyAct) -> Double {
     });
     Double { addr, seen }
 }
+
+use std::collections::{HashMap, VecDeque};
+
+#[derive(Clone)]
+pub enum KReply {
+    Http(u16, &'static str, String),
+    /// Read the request, then close without answering.
+    Close,
+    /// Read the request, then say nothing.
+    Hang,
+}
+
+pub fn kok(v: serde_json::Value) -> KReply {
+    KReply::Http(200, "application/json", v.to_string())
+}
+
+#[derive(Clone, Debug)]
+pub struct Recorded {
+    pub method: String,
+    pub target: String,
+    pub headers: Vec<(String, String)>,
+    pub body: String,
+}
+impl Recorded {
+    pub fn header(&self, name: &str) -> Option<&str> {
+        self.headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+/// A plain-HTTP Kraken: replies per path (each call takes the next; the last repeats), every
+/// request recorded. An unscripted path answers 404 so a test fails loudly.
+pub struct Kraken {
+    pub addr: SocketAddr,
+    requests: Arc<Mutex<Vec<Recorded>>>,
+    conns: Arc<AtomicUsize>,
+}
+impl Kraken {
+    pub fn url(&self) -> String {
+        format!("http://127.0.0.1:{}", self.addr.port())
+    }
+    pub fn requests(&self) -> Vec<Recorded> {
+        self.requests.lock().unwrap().clone()
+    }
+    pub fn conns(&self) -> usize {
+        self.conns.load(SeqCst)
+    }
+}
+
+pub async fn kraken(script: Vec<(&'static str, Vec<KReply>)>) -> Kraken {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let script: Arc<Mutex<HashMap<String, VecDeque<KReply>>>> = Arc::new(Mutex::new(
+        script
+            .into_iter()
+            .map(|(p, r)| (p.to_string(), r.into()))
+            .collect(),
+    ));
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let conns = Arc::new(AtomicUsize::new(0));
+    let (rq, cn) = (requests.clone(), conns.clone());
+    tokio::spawn(async move {
+        while let Ok((mut s, _)) = listener.accept().await {
+            cn.fetch_add(1, SeqCst);
+            let (script, rq) = (script.clone(), rq.clone());
+            tokio::spawn(async move {
+                let Some((head, body)) = read_request(&mut s, &Seen::default()).await else {
+                    return;
+                };
+                let mut lines = head.lines();
+                let mut first = lines.next().unwrap_or("").split(' ');
+                let (method, target) = (
+                    first.next().unwrap_or("").to_string(),
+                    first.next().unwrap_or("").to_string(),
+                );
+                let headers = lines
+                    .filter_map(|l| l.split_once(": "))
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect();
+                rq.lock().unwrap().push(Recorded {
+                    method,
+                    target: target.clone(),
+                    headers,
+                    body,
+                });
+                let path = target.split('?').next().unwrap_or("").to_string();
+                let reply = {
+                    let mut all = script.lock().unwrap();
+                    all.get_mut(&path).and_then(|q| {
+                        if q.len() > 1 {
+                            q.pop_front()
+                        } else {
+                            q.front().cloned()
+                        }
+                    })
+                };
+                match reply {
+                    Some(KReply::Http(status, ct, body)) => {
+                        let raw = format!(
+                            "HTTP/1.1 {status} X\r\nContent-Type: {ct}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                            body.len()
+                        );
+                        let _ = s.write_all(raw.as_bytes()).await;
+                        let _ = s.shutdown().await;
+                    }
+                    Some(KReply::Close) => {}
+                    Some(KReply::Hang) => tokio::time::sleep(Duration::from_secs(30)).await,
+                    None => {
+                        let _ = s
+                            .write_all(b"HTTP/1.1 404 X\r\nContent-Length: 10\r\n\r\nunscripted")
+                            .await;
+                    }
+                }
+            });
+        }
+    });
+    Kraken {
+        addr,
+        requests,
+        conns,
+    }
+}
