@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/honeymaker", "ext/honeymaker_native"]
+members = ["crates/honeymaker", "crates/honeymaker-client", "ext/honeymaker_native"]
 resolver = "3"
 
 [workspace.package]

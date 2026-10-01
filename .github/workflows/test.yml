@@ -25,6 +25,8 @@ jobs:
           bundler-cache: true
           cargo-cache: true
       - run: cargo test --locked -p honeymaker
+      - run: cargo test --locked -p honeymaker-client
+      - run: cargo clippy --locked -p honeymaker-client --all-targets -- -D warnings
       - run: bundle exec rake compile
       - run: bundle exec rake test
         env:
