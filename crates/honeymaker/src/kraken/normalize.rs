@@ -156,6 +156,9 @@ pub struct NormalizedOrder<D> {
     pub quote_amount: Option<D>,
     pub amount_exec: D,
     pub quote_amount_exec: D,
+    /// Kraken's client order id and user reference, as sent (absent or null → None).
+    pub cl_ord_id: Option<Value>,
+    pub userref: Option<Value>,
 }
 
 pub fn order_type(v: Option<&Value>) -> OrderType {
@@ -177,13 +180,27 @@ fn status(v: Option<&Value>) -> OrderStatus {
 
 pub fn orders<D: Num>(data: &Value) -> R<Vec<NormalizedOrder<D>>, D> {
     let obj = envelope_or_return!(data);
+    Ok(Finished::Ok(order_entries::<D>(result_entries(obj)?)?))
+}
+
+fn order_entries<D: Num>(
+    entries: Vec<(Value, &Value)>,
+) -> Result<Vec<NormalizedOrder<D>>, NormError<D::Error>> {
     let empty = Map::new();
     let mut out = Vec::new();
-    for (order_id, raw) in result_entries(obj)? {
+    for (order_id, raw) in entries {
         let raw = string_fields::<D>(
             raw,
             &[
-                "descr", "status", "oflags", "vol", "vol_exec", "cost", "price",
+                "descr",
+                "status",
+                "oflags",
+                "vol",
+                "vol_exec",
+                "cost",
+                "price",
+                "cl_ord_id",
+                "userref",
             ],
         )?;
         let descr = match raw.get("descr") {
@@ -237,9 +254,63 @@ pub fn orders<D: Num>(data: &Value) -> R<Vec<NormalizedOrder<D>>, D> {
             quote_amount,
             amount_exec,
             quote_amount_exec,
+            cl_ord_id: raw.get("cl_ord_id").filter(|v| !v.is_null()).cloned(),
+            userref: raw.get("userref").filter(|v| !v.is_null()).cloned(),
         });
     }
-    Ok(Finished::Ok(out))
+    Ok(out)
+}
+
+/// OpenOrders (`result.open`) and ClosedOrders (`result.closed` + `result.count`): QueryOrders'
+/// order shape under one more key. Both containers must be objects: a missing or null one is an
+/// unreadable answer, never "no orders" (a lookup would otherwise conclude absence from it).
+/// The count is returned raw.
+pub fn listed_orders<D: Num>(
+    data: &Value,
+    key: &str,
+) -> R<(Vec<NormalizedOrder<D>>, Option<Value>), D> {
+    let obj = envelope_or_return!(data);
+    let result = match obj.get("result") {
+        Some(Value::Object(m)) => m,
+        other => return Err(format!("result is not an object: {other:?}").into()),
+    };
+    let entries: Vec<(Value, &Value)> = match result.get(key) {
+        Some(Value::Object(m)) => m.iter().map(|(k, v)| (object_key(k), v)).collect(),
+        other => return Err(format!("{key} is not an object: {other:?}").into()),
+    };
+    Ok(Finished::Ok((
+        order_entries::<D>(entries)?,
+        result.get("count").cloned(),
+    )))
+}
+
+pub struct TickerPrices<D> {
+    pub bid: D,
+    pub ask: D,
+    pub last: D,
+}
+
+/// deltabadger's Exchanges::Kraken#get_ticker_information: the first result entry's `b[0]`,
+/// `a[0]` and `c[0]` (last trade closed). None when the result names no pair.
+pub fn ticker_prices<D: Num>(data: &Value) -> R<Option<TickerPrices<D>>, D> {
+    let obj = envelope_or_return!(data);
+    let Some((_, info)) = result_entries(obj)?.into_iter().next() else {
+        return Ok(Finished::Ok(None));
+    };
+    let info = info
+        .as_object()
+        .ok_or_else(|| format!("ticker entry is not an object: {info}"))?;
+    let first = |k: &str| -> Result<D, NormError<D::Error>> {
+        match info.get(k) {
+            Some(Value::Array(a)) => dec(a.first()),
+            other => Err(format!("{k}[0] missing: {other:?}").into()),
+        }
+    };
+    Ok(Finished::Ok(Some(TickerPrices {
+        bid: first("b")?,
+        ask: first("a")?,
+        last: first("c")?,
+    })))
 }
 
 /// `(result.data.dig("result", "txid") || []).first` as the raw JSON value.

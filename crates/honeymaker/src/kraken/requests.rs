@@ -34,6 +34,30 @@ pub type Fields = &'static [(&'static str, &'static str)];
 pub fn layout(op: &str) -> Option<(Method, &'static str, Fields)> {
     use Method::*;
     Some(match op {
+        // Rust callers only (the gem has no wrapper for them); wire names from Kraken's REST docs.
+        "open_orders" => (
+            Post,
+            "/0/private/OpenOrders",
+            &[
+                ("trades", "trades"),
+                ("userref", "userref"),
+                ("cl_ord_id", "cl_ord_id"),
+            ],
+        ),
+        "closed_orders" => (
+            Post,
+            "/0/private/ClosedOrders",
+            &[
+                ("trades", "trades"),
+                ("userref", "userref"),
+                ("cl_ord_id", "cl_ord_id"),
+                ("start", "start"),
+                ("end", "end_time"),
+                ("ofs", "ofs"),
+                ("closetime", "closetime"),
+                ("consolidate_taker", "consolidate_taker"),
+            ],
+        ),
         "query_orders_info" => (
             Post,
             "/0/private/QueryOrders",
