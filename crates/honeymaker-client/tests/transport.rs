@@ -602,3 +602,137 @@ async fn an_inconsistent_content_length_is_rejected_before_connecting() {
     assert_eq!(err(&result).cause, Cause::Other);
     assert_eq!(t.seen.conns(), 0);
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn request_shapes_what_send_received() {
+    use honeymaker_client::transport::Reply;
+    let pki = pki();
+    let t = target(
+        Tls::Trusted,
+        Act::Reply(http("200 OK", "application/json", OK_JSON)),
+        &pki,
+    )
+    .await;
+    let tr = Transport::new(&t.https(), None, quick(), Some(pki.roots.clone())).unwrap();
+    assert_eq!(
+        tr.request(&post()).await.unwrap(),
+        Reply::Parsed(serde_json::json!({"error": [], "result": {"a": 1}}))
+    );
+}
+
+// Binary replies exercise framing and inflation through the real send/request pipeline.
+async fn encoded_response(
+    framing: honeymaker_client::transport::BodyFraming,
+    truncated: bool,
+) -> Transport {
+    use flate2::{Compression, write::GzEncoder};
+    use honeymaker_client::transport::BodyFraming;
+    use std::io::Write;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(OK_JSON.as_bytes()).unwrap();
+    let mut body = encoder.finish().unwrap();
+    if truncated {
+        body.truncate(12);
+    }
+    let mut wire = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Encoding: gzip\r\nConnection: close\r\n".to_vec();
+    match framing {
+        BodyFraming::ContentLength => {
+            wire.extend(format!("Content-Length: {}\r\n\r\n", body.len()).as_bytes())
+        }
+        BodyFraming::Chunked => wire
+            .extend(format!("Transfer-Encoding: chunked\r\n\r\n{:x}\r\n", body.len()).as_bytes()),
+        BodyFraming::CloseDelimited => wire.extend(b"\r\n"),
+    }
+    wire.extend(body);
+    if framing == BodyFraming::Chunked {
+        wire.extend(b"\r\n0\r\n\r\n");
+    }
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut request = vec![0; post().body.unwrap().len()];
+        let mut head = Vec::new();
+        while !head.ends_with(b"\r\n\r\n") {
+            head.push(socket.read_u8().await.unwrap());
+        }
+        socket.read_exact(&mut request).await.unwrap();
+        socket.write_all(&wire).await.unwrap();
+        socket.shutdown().await.unwrap();
+    });
+    Transport::new(&base, None, quick(), None).unwrap()
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn send_preserves_body_framing() {
+    use honeymaker_client::transport::BodyFraming;
+    for framing in [
+        BodyFraming::ContentLength,
+        BodyFraming::Chunked,
+        BodyFraming::CloseDelimited,
+    ] {
+        let tr = encoded_response(framing, true).await;
+        let raw = tr.send(&post()).await.unwrap();
+        assert_eq!(raw.framing, framing);
+        assert_eq!(raw.body.len(), 12);
+        assert_eq!(raw.content_encoding.as_deref(), Some("gzip"));
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn request_inflates_gzip_under_every_framing() {
+    use honeymaker_client::transport::{BodyFraming, Reply};
+    for framing in [
+        BodyFraming::ContentLength,
+        BodyFraming::Chunked,
+        BodyFraming::CloseDelimited,
+    ] {
+        let tr = encoded_response(framing, false).await;
+        assert_eq!(
+            tr.request(&post()).await.unwrap(),
+            Reply::Parsed(serde_json::json!({"error": [], "result": {"a": 1}}))
+        );
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn request_with_truncated_content_length_gzip_matches_the_gem() {
+    use honeymaker_client::transport::{BodyFraming, Reply};
+    let tr = encoded_response(BodyFraming::ContentLength, true).await;
+    assert_eq!(tr.request(&post()).await.unwrap(), Reply::NotJson);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn request_with_truncated_chunked_gzip_matches_the_gem() {
+    use honeymaker_client::transport::{BodyFraming, Reply};
+    let tr = encoded_response(BodyFraming::Chunked, true).await;
+    assert_eq!(tr.request(&post()).await.unwrap(), Reply::NotJson);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn request_with_truncated_close_delimited_gzip_matches_the_gem() {
+    use honeymaker_client::transport::BodyFraming;
+    let tr = encoded_response(BodyFraming::CloseDelimited, true).await;
+    let f = tr.request(&post()).await.unwrap_err();
+    assert_eq!(f.cause, Cause::Other);
+    assert!(f.message.starts_with("Zlib::BufError:"));
+    assert!(!f.pre_transmission());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_non_chunked_transfer_encoding_is_close_delimited() {
+    use honeymaker_client::transport::BodyFraming;
+    let pki = pki();
+    let t = target(
+        Tls::Plain,
+        Act::Reply(
+            "HTTP/1.1 200 OK\r\nTransfer-Encoding: identity\r\nConnection: close\r\n\r\nraw!",
+        ),
+        &pki,
+    )
+    .await;
+    let raw = send(&t.http(), None, &pki).await.unwrap();
+    assert_eq!(raw.framing, BodyFraming::CloseDelimited);
+    assert_eq!(&raw.body[..], b"raw!");
+}
