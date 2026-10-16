@@ -70,8 +70,10 @@ class Honeymaker::Clients::HyperliquidTest < Minitest::Test
     # quote_amount_exec 0 (the job subtracts the quote delta from missed_quote_amount).
     order_body = order_status_body(status: "filled", sz: "0.0", orig_sz: "0.00018", limit_px: "64689.0")
     stub_connection(:post, order_body)
-    @client.expects(:user_fills_by_time)
-           .returns(Honeymaker::Result::Success.new([fill(oid: 111, px: "1.0", sz: "5.0")])) # no match
+    # no match; the walk reads on until a page brings nothing new
+    @client.expects(:user_fills_by_time).twice
+           .returns(Honeymaker::Result::Success.new([fill(oid: 111, px: "1.0", sz: "5.0", tid: 1)]),
+                    Honeymaker::Result::Success.new([fill(oid: 111, px: "1.0", sz: "5.0", tid: 1)]))
 
     result = @client.order_status(user: "0xabc", oid: 123456789)
 
@@ -190,6 +192,80 @@ class Honeymaker::Clients::HyperliquidTest < Minitest::Test
     assert result.success?
   end
 
+  # One userFillsByTime answer is capped; an order whose fills spill past it must still be costed
+  # exactly, not estimated from the limit price.
+  def test_order_status_reads_fills_past_the_first_page
+    order_body = order_status_body(status: "filled", sz: "0.0", orig_sz: "0.00020")
+    stub_connection(:post, order_body)
+    first = [fill(oid: 1, px: "1.0", sz: "1.0", time: 1781698875556),
+             fill(oid: 123456789, px: "64000.0", sz: "0.00010", time: 1781698875600, tid: 7)]
+    second = [fill(oid: 123456789, px: "64000.0", sz: "0.00010", time: 1781698875600, tid: 7), # boundary re-read
+              fill(oid: 123456789, px: "66000.0", sz: "0.00010", time: 1781698875700)]
+    seq = sequence("pages")
+    @client.expects(:user_fills_by_time).with(user: "0xabc", start_time: 1781698875556).in_sequence(seq)
+           .returns(Honeymaker::Result::Success.new(first))
+    @client.expects(:user_fills_by_time).with(user: "0xabc", start_time: 1781698875600).in_sequence(seq)
+           .returns(Honeymaker::Result::Success.new(second))
+
+    result = @client.order_status(user: "0xabc", oid: 123456789)
+
+    assert_equal BigDecimal("13.0"), result.data[:quote_amount_exec]
+    assert_equal BigDecimal("65000"), result.data[:price]
+  end
+
+  def test_order_status_propagates_a_failed_later_page
+    stub_connection(:post, order_status_body(status: "filled", sz: "0.0", orig_sz: "0.00020"))
+    @client.expects(:user_fills_by_time).twice
+           .returns(Honeymaker::Result::Success.new([fill(oid: 123456789, px: "64000.0", sz: "0.00010")]),
+                    Honeymaker::Result::Failure.new("Net::ReadTimeout"))
+
+    result = @client.order_status(user: "0xabc", oid: 123456789)
+
+    assert result.failure?
+    assert_includes result.errors, "Net::ReadTimeout"
+  end
+
+  def test_user_role
+    connection = stub
+    connection.expects(:post).yields(req = stub_everything).returns(stub(body: { "role" => "agent", "data" => { "user" => "0xm" } }))
+    req.expects(:body=).with({ type: "userRole", user: "0xabc" }.to_json)
+    @client.instance_variable_set(:@connection, connection)
+
+    result = @client.user_role(user: "0xabc")
+
+    assert_equal "agent", result.data["role"]
+  end
+
+  # == Trading client construction ==
+
+  def test_trading_client_opens_no_websocket
+    with_fake_hyperliquid do
+      client = Honeymaker::Clients::Hyperliquid.new(api_key: "0xabc", api_secret: "0x01")
+      assert client.send(:build_exchange).info.skip_ws
+    end
+  end
+
+  def test_trading_client_sends_through_the_configured_proxy
+    with_fake_hyperliquid do
+      client = Honeymaker::Clients::Hyperliquid.new(api_key: "0xabc", api_secret: "0x01", proxy: "http://proxy.local:8080")
+      exchange = client.send(:build_exchange)
+      [exchange.instance_variable_get(:@transport), exchange.info.transport].each do |transport|
+        assert_equal "proxy.local", transport.instance_variable_get(:@connection).proxy.uri.host
+      end
+    end
+  end
+
+  def test_trading_clients_sign_strictly_increasing_nonces_within_one_millisecond
+    with_fake_hyperliquid do
+      Time.stubs(:now).returns(Time.at(1_781_698_875.556))
+      a = Honeymaker::Clients::Hyperliquid.new(api_key: "0xabc", api_secret: "0x01").send(:build_exchange)
+      b = Honeymaker::Clients::Hyperliquid.new(api_key: "0xabc", api_secret: "0x01").send(:build_exchange)
+      nonces = [a.nonce, b.nonce, a.nonce]
+      assert_equal nonces.sort.uniq, nonces
+      assert_operator nonces.first, :>=, 1_781_698_875_556
+    end
+  end
+
   # == Raised trading errors keep their HTTP status ==
   #
   # Order placement goes through hyperliquid-rb, which raises instead of answering. Whether the
@@ -285,8 +361,48 @@ class Honeymaker::Clients::HyperliquidTest < Minitest::Test
     }
   end
 
-  def fill(oid:, px:, sz:, coin: "@142", side: "B")
+  def fill(oid:, px:, sz:, coin: "@142", side: "B", time: 1781698875556, tid: nil)
+    @tid = (@tid || 0) + 1
     { "coin" => coin, "oid" => oid, "px" => px, "sz" => sz, "side" => side,
-      "time" => 1781698875556, "fee" => "0.011", "tid" => 99 }
+      "time" => time, "fee" => "0.011", "tid" => tid || @tid }
+  end
+
+  # hyperliquid-rb's shape, as far as build_exchange touches it. The gem itself is an optional
+  # dependency (native secp256k1) that this bundle does not carry.
+  module FakeHyperliquid
+    class Transport
+      def initialize = @connection = Faraday.new(url: "https://api.hyperliquid.xyz")
+    end
+
+    class Info
+      attr_reader :transport, :skip_ws
+
+      def initialize(skip_ws:)
+        @skip_ws = skip_ws
+        @transport = Transport.new
+      end
+    end
+
+    class Exchange
+      attr_reader :info
+
+      def initialize(private_key:, skip_ws: false)
+        @info = Info.new(skip_ws: skip_ws)
+        @transport = Transport.new
+      end
+
+      def nonce = timestamp_ms
+
+      private
+
+      def timestamp_ms = (Time.now.to_f * 1000).to_i
+    end
+  end
+
+  def with_fake_hyperliquid
+    Object.const_set(:Hyperliquid, FakeHyperliquid)
+    yield
+  ensure
+    Object.send(:remove_const, :Hyperliquid)
   end
 end
