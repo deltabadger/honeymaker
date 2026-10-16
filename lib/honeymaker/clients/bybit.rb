@@ -96,6 +96,15 @@ module Honeymaker
         })
       end
 
+      # Closed orders that /v5/order/realtime no longer returns.
+      def order_history(category:, symbol: nil, order_id: nil, order_link_id: nil, order_status: nil,
+                        start_time: nil, end_time: nil, limit: nil, cursor: nil)
+        get_authenticated("/v5/order/history", {
+          category: category, symbol: symbol, orderId: order_id, orderLinkId: order_link_id,
+          orderStatus: order_status, startTime: start_time, endTime: end_time, limit: limit, cursor: cursor
+        })
+      end
+
       def transaction_log(account_type: nil, category: nil, currency: nil, type: nil, start_time: nil, end_time: nil, limit: nil, cursor: nil)
         get_authenticated("/v5/account/transaction-log", {
           accountType: account_type, category: category, currency: currency, type: type,
@@ -113,6 +122,13 @@ module Honeymaker
       def deposit_records(coin: nil, start_time: nil, end_time: nil, limit: nil, cursor: nil)
         get_authenticated("/v5/asset/deposit/query-record", {
           coin: coin, startTime: start_time, endTime: end_time, limit: limit, cursor: cursor
+        })
+      end
+
+      # Off-chain deposits from another Bybit user; query-record does not include them.
+      def internal_deposit_records(tx_id: nil, coin: nil, start_time: nil, end_time: nil, limit: nil, cursor: nil)
+        get_authenticated("/v5/asset/deposit/query-internal-record", {
+          txID: tx_id, coin: coin, startTime: start_time, endTime: end_time, limit: limit, cursor: cursor
         })
       end
 

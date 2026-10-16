@@ -46,6 +46,21 @@ class Honeymaker::Clients::BybitTest < Minitest::Test
     assert_equal :closed, result.data[:status]
   end
 
+  def test_order_history
+    @client.expects(:get_authenticated).with("/v5/order/history", {
+      category: "spot", symbol: nil, orderId: "123", orderLinkId: nil, orderStatus: nil,
+      startTime: 1, endTime: 2, limit: 50, cursor: "c"
+    }).returns(Honeymaker::Result::Success.new({ "retCode" => 0 }))
+    assert @client.order_history(category: "spot", order_id: "123", start_time: 1, end_time: 2, limit: 50, cursor: "c").success?
+  end
+
+  def test_internal_deposit_records
+    @client.expects(:get_authenticated).with("/v5/asset/deposit/query-internal-record", {
+      txID: nil, coin: "USDT", startTime: 1, endTime: 2, limit: 50, cursor: "c"
+    }).returns(Honeymaker::Result::Success.new({ "retCode" => 0 }))
+    assert @client.internal_deposit_records(coin: "USDT", start_time: 1, end_time: 2, limit: 50, cursor: "c").success?
+  end
+
   def test_cancel_order
     stub_connection(:post, { "result" => { "orderId" => "123" } })
     result = @client.cancel_order(category: "spot", symbol: "BTCUSDT", order_id: "123")
