@@ -5,6 +5,20 @@ module Honeymaker
     class Hyperliquid < Client
       URL = "https://api.hyperliquid.xyz"
       RATE_LIMITS = { default: 200, orders: 200 }.freeze
+      # A cap on the userFillsByTime walk for one order's cost: the venue keeps only the 10000 most
+      # recent fills, at most 2000 (500 by the general note) per answer, so 25 pages reach them all.
+      FILLS_PAGES = 25
+
+      NONCE_LOCK = Mutex.new
+      @last_nonce = 0
+
+      # Hyperliquid keeps the 100 highest nonces per signer and refuses a reused one. hyperliquid-rb
+      # signs with the wall clock in ms, so two orders signed in the same ms by one agent collide —
+      # and the app builds a client per call, so the counter lives on the class: strictly
+      # increasing for the whole process, never behind the clock (the venue's own advice).
+      def self.next_nonce
+        NONCE_LOCK.synchronize { @last_nonce = [(Time.now.to_f * 1000).to_i, @last_nonce + 1].max }
+      end
 
       def initialize(api_key: nil, api_secret: nil, proxy: nil, logger: nil)
         super
@@ -87,13 +101,13 @@ module Honeymaker
         quote_amount_exec = BigDecimal("0")
         price = limit_price
         if amount_exec.positive?
-          fills_result = order["timestamp"] ? user_fills_by_time(user: user, start_time: order["timestamp"]) : nil
+          fills_result = order["timestamp"] ? order_fills(user: user, oid: oid, start_time: order["timestamp"], size: amount_exec) : nil
           # A FAILED exact-cost lookup (timeout / rate-limit) is PROPAGATED so the consumer's typed-error
           # retry runs — never record an executed order with an estimated cost just because userFills
           # blipped (that would silently corrupt accounting and skip the retry).
           return fills_result if fills_result&.failure?
 
-          matched = Array(fills_result&.data).select { |f| f["oid"].to_s == oid.to_s }
+          matched = Array(fills_result&.data)
           matched_quote = matched.sum(BigDecimal("0")) { |f| BigDecimal(f["px"].to_s) * BigDecimal(f["sz"].to_s) }
           # userFills SUCCEEDED but has no matching fill (aged out of the window) → estimate from the
           # limit price so a filled order never reports quote_amount_exec 0. Only on success, never failure.
@@ -127,6 +141,11 @@ module Honeymaker
         post_info(body)
       end
 
+      # "missing", "user", "agent" (with the master under data.user), "vault" or "subAccount".
+      def user_role(user:)
+        post_info({ type: "userRole", user: user })
+      end
+
       # --- Trading (requires hyperliquid-rb gem) ---
 
       def order(coin:, is_buy:, size:, limit_px:, order_type: { limit: { tif: "Gtc" } })
@@ -156,6 +175,28 @@ module Honeymaker
       end
 
       private
+
+      # This order's fills, from its timestamp on. One answer is capped, so the walk goes on from the
+      # newest time it saw (inclusive, so fills are deduped by tid) until the order's executed size
+      # is covered or a page brings nothing new.
+      def order_fills(user:, oid:, start_time:, size:)
+        seen = {}
+        matched = []
+        FILLS_PAGES.times do
+          page = user_fills_by_time(user: user, start_time: start_time)
+          return page if page.failure?
+
+          fresh = Array(page.data).reject { |f| seen[f["tid"] || f.hash] }
+          break if fresh.empty?
+
+          fresh.each { |f| seen[f["tid"] || f.hash] = true }
+          matched.concat(fresh.select { |f| f["oid"].to_s == oid.to_s })
+          break if matched.sum(BigDecimal("0")) { |f| BigDecimal(f["sz"].to_s) } >= size
+
+          start_time = fresh.map { |f| f["time"].to_i }.max
+        end
+        Result::Success.new(matched)
+      end
 
       # Trading does not go over this client's Faraday connection: it goes through hyperliquid-rb,
       # which raises its own error for every non-2xx instead of answering. Client#with_rescue can
@@ -211,10 +252,28 @@ module Honeymaker
         raise Error, "Trading requires api_secret (agent key)" unless @api_secret && !@api_secret.empty?
         @exchange ||= begin
           require "hyperliquid"
-          ::Hyperliquid::Exchange.new(private_key: @api_secret)
+          build_exchange
         rescue LoadError
           raise Error, "Add 'hyperliquid-rb' to your Gemfile to use Hyperliquid trading"
         end
+      end
+
+      # hyperliquid-rb's defaults do not fit a client built per call:
+      # - its Info opens a websocket and a ping thread unless skip_ws, and nothing here ever stops
+      #   them — one leaked socket per trading client. Nothing here subscribes, so never open it;
+      # - its two Transports build their own Faraday without our proxy, so placement and the asset
+      #   lookup went out direct. hyperliquid-rb 0.1.1 has no proxy option; set it on both;
+      # - its nonce is the wall-clock ms (see .next_nonce).
+      def build_exchange
+        exchange = ::Hyperliquid::Exchange.new(private_key: @api_secret, skip_ws: true)
+        if @proxy
+          [exchange.instance_variable_get(:@transport), exchange.info.transport].each do |transport|
+            transport.instance_variable_get(:@connection).proxy = @proxy
+          end
+        end
+        exchange.singleton_class.send(:define_method, :timestamp_ms) { Honeymaker::Clients::Hyperliquid.next_nonce }
+        exchange.singleton_class.send(:private, :timestamp_ms)
+        exchange
       end
 
       def post_info(body)
