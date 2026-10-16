@@ -84,6 +84,16 @@ module Honeymaker
         post_signed("/v1/transfers", { timestamp: timestamp, limit_transfers: limit_transfers })
       end
 
+      # POST /v2/transfers, which replaces the retiring /v1/transfers: limit_transfers ≤ 50 (default 10),
+      # timestamp in ms, rows carry feeAmount/feeCurrency/txHash; 1 request per 5 s per account.
+      def get_transfers_v2(timestamp: nil, limit_transfers: nil, currency: nil, network: nil, account: nil,
+                           show_completed_deposit_advances: nil)
+        post_signed("/v2/transfers", {
+          timestamp: timestamp, limit_transfers: limit_transfers, currency: currency, network: network,
+          account: account, show_completed_deposit_advances: show_completed_deposit_advances
+        })
+      end
+
       def withdraw(currency:, address:, amount:)
         post_signed("/v1/withdraw/#{currency}", { address: address, amount: amount })
       end

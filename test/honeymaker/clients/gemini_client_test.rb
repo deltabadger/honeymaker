@@ -89,6 +89,21 @@ class Honeymaker::Clients::GeminiTest < Minitest::Test
     assert_equal OpenSSL::HMAC.hexdigest("sha384", "test_secret", payload), request.headers[:"X-GEMINI-SIGNATURE"]
   end
 
+  def test_get_transfers_v2
+    @client.expects(:post_signed).with("/v2/transfers", has_entries(timestamp: 1, limit_transfers: 50))
+           .returns(Honeymaker::Result::Success.new([{ "eid" => 1, "feeCurrency" => "BTC" }]))
+    assert @client.get_transfers_v2(timestamp: 1, limit_transfers: 50).success?
+  end
+
+  def test_get_transfers_v2_signs_the_v2_request
+    connection = stub
+    connection.expects(:post).yields(req = stub_everything).returns(stub(body: []))
+    req.expects(:url).with("/v2/transfers")
+    req.expects(:headers=).with { |h| JSON.parse(Base64.decode64(h[:"X-GEMINI-PAYLOAD"]))["request"] == "/v2/transfers" }
+    @client.instance_variable_set(:@connection, connection)
+    assert @client.get_transfers_v2(limit_transfers: 50).success?
+  end
+
   private
 
   def stub_connection(method, body)
