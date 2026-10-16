@@ -71,8 +71,20 @@ class Honeymaker::Exchanges::MexcTest < Minitest::Test
     assert_equal 2, metal[:base_decimals]   # baseAssetPrecision
     assert_equal 5, metal[:quote_decimals]  # quoteAssetPrecision
     assert_equal 5, metal[:price_decimals]  # quotePrecision
-    assert_nil metal[:minimum_base_size]
-    assert_nil metal[:minimum_quote_size]
+    # The minimums live in MEXC's own fields; reading only the (absent) filters reported zero.
+    assert_equal "0.1", metal[:minimum_base_size]      # baseSizePrecision
+    assert_equal "1", metal[:minimum_quote_size]       # quoteAmountPrecision
+    assert_nil metal[:maximum_base_size]
+    assert_equal "2000000", metal[:maximum_quote_size] # maxQuoteAmount
+  end
+
+  # A market order's minimum (quoteAmountPrecisionMarket) can be the larger one.
+  def test_minimum_quote_size_is_the_larger_of_the_limit_and_market_minimums
+    body = load_fixture("mexc_exchange_info.json")
+    body["symbols"].first["quoteAmountPrecisionMarket"] = "5"
+    stub_connection(body)
+
+    assert_equal "5", @exchange.get_tickers_info.data.first[:minimum_quote_size]
   end
 
   def test_get_bid_ask_parses_response

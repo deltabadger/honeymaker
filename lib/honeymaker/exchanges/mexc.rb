@@ -16,10 +16,15 @@ module Honeymaker
               ticker: product["symbol"],
               base: product["baseAsset"],
               quote: product["quoteAsset"],
-              minimum_base_size: f[:lot_size]&.[]("minQty"),
-              minimum_quote_size: f[:notional]&.[]("minNotional"),
+              # MEXC sends no LOT_SIZE or NOTIONAL filter (only PERCENT_PRICE_BY_SIDE). Its minimums are
+              # baseSizePrecision ("min order quantity") and quoteAmountPrecision ("min order amount";
+              # quoteAmountPrecisionMarket for a market order, so the larger of the two), and
+              # maxQuoteAmount caps the order value. A filter still wins if MEXC ever sends one.
+              minimum_base_size: f[:lot_size]&.[]("minQty") || product["baseSizePrecision"],
+              minimum_quote_size: f[:notional]&.[]("minNotional") ||
+                product.values_at("quoteAmountPrecision", "quoteAmountPrecisionMarket").compact.max_by { |v| BigDecimal(v.to_s) },
               maximum_base_size: f[:lot_size]&.[]("maxQty"),
-              maximum_quote_size: f[:notional]&.[]("maxNotional"),
+              maximum_quote_size: f[:notional]&.[]("maxNotional") || product["maxQuoteAmount"],
               base_decimals: f[:lot_size] ? Utils.decimals(f[:lot_size]["stepSize"]) : product["baseAssetPrecision"],
               quote_decimals: product["quoteAssetPrecision"],
               price_decimals: f[:price] ? Utils.decimals(f[:price]["tickSize"]) : product["quotePrecision"],
