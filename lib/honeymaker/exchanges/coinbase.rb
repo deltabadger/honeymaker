@@ -6,7 +6,7 @@ module Honeymaker
       BASE_URL = "https://api.coinbase.com"
 
       ASSET_BLACKLIST = [
-        "RENDER",    # has the same external_id as RNDR
+        "RNDR",      # delisted; has the same external_id as RENDER
         "ZETACHAIN", # has the same external_id as ZETA
         "WAXL"       # has the same external_id as AXL
       ].freeze
@@ -51,10 +51,11 @@ module Honeymaker
 
       private
 
-      # Coinbase only signals problems explicitly: a `trading_disabled` flag or a non-"online"
-      # `status`. Absent either signal, treat the pair as enabled.
+      # Coinbase only signals problems explicitly: a `trading_disabled`, `is_disabled`, `limit_only`
+      # or `cancel_only` flag, or a non-"online" `status`. Absent any signal, treat the pair as
+      # enabled. limit_only is reported as not tradable, like Kraken's limit_only status.
       def trading_enabled?(product)
-        return false if product["trading_disabled"] == true
+        return false if %w[trading_disabled is_disabled limit_only cancel_only].any? { |flag| product[flag] == true }
         return false if product.key?("status") && product["status"] != "online"
 
         true

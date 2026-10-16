@@ -11,7 +11,7 @@
       "quote_max_size": "250000000"
     },
     {
-      "product_id": "RENDER-USD",
+      "product_id": "RNDR-USD",
       "base_increment": "0.01",
       "quote_increment": "0.01",
       "price_increment": "0.01",

@@ -16,7 +16,7 @@ class Honeymaker::Exchanges::CoinbaseTest < Minitest::Test
     result = @exchange.get_tickers_info
 
     assert result.success?
-    # RENDER is blacklisted, so only BTC-USD should remain
+    # RNDR is blacklisted, so only BTC-USD should remain
     assert_equal 1, result.data.size
     ticker = result.data.first
     assert_equal "BTC-USD", ticker[:ticker]
@@ -54,6 +54,26 @@ class Honeymaker::Exchanges::CoinbaseTest < Minitest::Test
     refute result.data.first[:trading_enabled]
   end
 
+  def test_get_tickers_info_disables_restricted_modes
+    %w[limit_only cancel_only is_disabled].each do |flag|
+      body = load_fixture("coinbase_products.json")
+      body["products"].first[flag] = true
+      stub_connection(body)
+
+      ticker = @exchange.get_tickers_info.data.first
+      assert ticker[:available], flag
+      refute ticker[:trading_enabled], flag
+    end
+  end
+
+  def test_keeps_render
+    body = load_fixture("coinbase_products.json")
+    body["products"] << body["products"].last.merge("product_id" => "RENDER-USD")
+    stub_connection(body)
+
+    assert_includes @exchange.get_tickers_info.data.map { |t| t[:base] }, "RENDER"
+  end
+
   def test_filters_blacklisted_assets
     body = load_fixture("coinbase_products.json")
     stub_connection(body)
@@ -61,7 +81,7 @@ class Honeymaker::Exchanges::CoinbaseTest < Minitest::Test
     result = @exchange.get_tickers_info
 
     bases = result.data.map { |t| t[:base] }
-    refute_includes bases, "RENDER"
+    refute_includes bases, "RNDR"
   end
 
   def test_get_bid_ask_parses_response
