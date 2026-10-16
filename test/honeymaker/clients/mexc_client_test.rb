@@ -70,6 +70,18 @@ class Honeymaker::Clients::MexcTest < Minitest::Test
     assert result.success?
   end
 
+  def test_capital_withdraw_posts_the_new_endpoint
+    @client.expects(:post_signed).with("/api/v3/capital/withdraw",
+                                       has_entries(coin: "USDT", address: "addr", amount: "10", netWork: "TRX"))
+           .returns(Honeymaker::Result::Success.new({ "id" => "w1" }))
+    assert_equal "w1", @client.capital_withdraw(coin: "USDT", address: "addr", amount: "10", net_work: "TRX").data["id"]
+  end
+
+  def test_get_all_coins_information_is_signed
+    @client.expects(:get_signed).with("/api/v3/capital/config/getall", { recvWindow: 5000 })
+    @client.get_all_coins_information
+  end
+
   def test_withdraw_history
     stub_connection(:get, [{ "coin" => "ETH" }])
     result = @client.withdraw_history

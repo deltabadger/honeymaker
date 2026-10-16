@@ -6,8 +6,9 @@ module Honeymaker
       URL = "https://api.mexc.com"
       RATE_LIMITS = { default: 100, orders: 200 }.freeze
 
-      def get_all_coins_information
-        get_public("/api/v3/capital/config/getall")
+      # Signed (permission SPOT_WITHDRAW_READ): unsigned, MEXC answers 400 "api key required".
+      def get_all_coins_information(recv_window: 5000)
+        get_signed("/api/v3/capital/config/getall", { recvWindow: recv_window })
       end
 
       def exchange_information
@@ -108,6 +109,19 @@ module Honeymaker
         get_signed("/api/v3/capital/withdraw/address", { recvWindow: recv_window })
       end
 
+      # POST /api/v3/capital/withdraw, the endpoint MEXC replaces /withdraw/apply with ("previous,
+      # offline soon"). It takes netWork — networkList[].netWork from get_all_coins_information, a
+      # different value from the old `network` — and answers a single { "id" } object, not an array.
+      def capital_withdraw(coin:, address:, amount:, net_work: nil, memo: nil, withdraw_order_id: nil,
+                           contract_address: nil, remark: nil, recv_window: 5000)
+        post_signed("/api/v3/capital/withdraw", {
+          coin: coin, address: address, amount: amount, netWork: net_work, memo: memo,
+          withdrawOrderId: withdraw_order_id, contractAddress: contract_address, remark: remark,
+          recvWindow: recv_window
+        })
+      end
+
+      # The previous endpoint, which MEXC marks "offline soon"; see #capital_withdraw.
       def withdraw(coin:, address:, amount:, network: nil, memo: nil, recv_window: 5000)
         post_signed("/api/v3/capital/withdraw/apply", {
           coin: coin, address: address, amount: amount,
