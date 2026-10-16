@@ -83,16 +83,29 @@ class Honeymaker::Clients::BingXTest < Minitest::Test
     assert result.success?
   end
 
+  # /openApi/spot/v1/trade/fills and /openApi/wallets/v1/capital/{deposit,withdraw}/... answer
+  # 100400 "this api is not exist"; these are the documented paths.
+  def test_get_trade_fills_reads_my_trades
+    @client.expects(:get_signed).with("/openApi/spot/v1/trade/myTrades",
+                                      { symbol: "BTC-USDT", orderId: nil, startTime: 1, endTime: 2, fromId: nil, limit: 500 })
+    @client.get_trade_fills(symbol: "BTC-USDT", start_time: 1, end_time: 2, limit: 500)
+  end
+
   def test_deposit_history
-    stub_connection(:get, [{ "coin" => "BTC" }])
-    result = @client.deposit_history
-    assert result.success?
+    @client.expects(:get_signed).with("/openApi/api/v3/capital/deposit/hisrec", has_entries(offset: 0, limit: 1000))
+           .returns(Honeymaker::Result::Success.new([{ "coin" => "BTC" }]))
+    assert @client.deposit_history(offset: 0, limit: 1000).success?
   end
 
   def test_withdraw_history
-    stub_connection(:get, [{ "coin" => "ETH" }])
-    result = @client.withdraw_history
-    assert result.success?
+    @client.expects(:get_signed).with("/openApi/api/v3/capital/withdraw/history", has_entries(startTime: 1, endTime: 2))
+           .returns(Honeymaker::Result::Success.new([{ "coin" => "ETH" }]))
+    assert @client.withdraw_history(start_time: 1, end_time: 2).success?
+  end
+
+  def test_get_klines_sends_time_zone
+    @client.expects(:get_public).with("/openApi/spot/v1/market/kline", has_entries(symbol: "BTC-USDT", timeZone: 0))
+    @client.get_klines(symbol: "BTC-USDT", interval: "1d", time_zone: 0)
   end
 
   private

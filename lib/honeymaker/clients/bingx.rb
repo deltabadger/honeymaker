@@ -18,10 +18,11 @@ module Honeymaker
         get_public("/openApi/spot/v1/market/depth", { symbol: symbol, limit: limit })
       end
 
-      def get_klines(symbol:, interval:, start_time: nil, end_time: nil, limit: nil)
+      # time_zone: 0 aligns candles to UTC; BingX's default is 8 (UTC+8).
+      def get_klines(symbol:, interval:, start_time: nil, end_time: nil, limit: nil, time_zone: nil)
         get_public("/openApi/spot/v1/market/kline", {
           symbol: symbol, interval: interval,
-          startTime: start_time, endTime: end_time, limit: limit
+          startTime: start_time, endTime: end_time, limit: limit, timeZone: time_zone
         })
       end
 
@@ -87,22 +88,25 @@ module Honeymaker
         get_signed("/openApi/wallets/v1/capital/config/getall")
       end
 
-      def get_trade_fills(symbol: nil, order_id: nil, start_time: nil, end_time: nil, from_id: nil, limit: nil)
-        get_signed("/openApi/spot/v1/trade/fills", {
+      # Query transaction details. symbol is required; only the past 7 days; limit ≤ 1000.
+      def get_trade_fills(symbol:, order_id: nil, start_time: nil, end_time: nil, from_id: nil, limit: nil)
+        get_signed("/openApi/spot/v1/trade/myTrades", {
           symbol: symbol, orderId: order_id,
           startTime: start_time, endTime: end_time, fromId: from_id, limit: limit
         })
       end
 
+      # Deposit records: a bare array, offset + limit ≤ 1000.
       def deposit_history(coin: nil, status: nil, start_time: nil, end_time: nil, offset: nil, limit: nil)
-        get_signed("/openApi/wallets/v1/capital/deposit/hisrec", {
+        get_signed("/openApi/api/v3/capital/deposit/hisrec", {
           coin: coin, status: status,
           startTime: start_time, endTime: end_time, offset: offset, limit: limit
         })
       end
 
+      # Withdraw records: a bare array, offset + limit ≤ 1000.
       def withdraw_history(coin: nil, status: nil, start_time: nil, end_time: nil, offset: nil, limit: nil, id: nil)
-        get_signed("/openApi/wallets/v1/capital/withdraw/history", {
+        get_signed("/openApi/api/v3/capital/withdraw/history", {
           coin: coin, status: status,
           startTime: start_time, endTime: end_time, offset: offset, limit: limit, id: id
         })
