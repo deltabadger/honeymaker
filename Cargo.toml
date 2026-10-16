@@ -3,7 +3,7 @@ members = ["crates/honeymaker", "crates/honeymaker-client", "ext/honeymaker_nati
 resolver = "3"
 
 [workspace.package]
-version = "0.12.3" # lockstep with lib/honeymaker/version.rb (test/native/lockstep_test.rb)
+version = "0.12.4" # lockstep with lib/honeymaker/version.rb (test/native/lockstep_test.rb)
 edition = "2024"
 rust-version = "1.94"
 license = "MIT"
