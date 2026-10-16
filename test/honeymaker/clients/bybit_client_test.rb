@@ -46,6 +46,16 @@ class Honeymaker::Clients::BybitTest < Minitest::Test
     assert_equal :closed, result.data[:status]
   end
 
+  def test_get_order_partially_filled_canceled_is_cancelled
+    stub_connection(:get, { "retCode" => 0, "retMsg" => "OK", "result" => { "list" => [{
+      "orderId" => "123", "orderType" => "Limit", "side" => "Buy", "orderStatus" => "PartiallyFilledCanceled",
+      "avgPrice" => "50000", "qty" => "0.002", "cumExecQty" => "0.001", "cumExecValue" => "50"
+    }] } })
+    result = @client.get_order(category: "spot", order_id: "123")
+    assert_equal :cancelled, result.data[:status]
+    assert_equal BigDecimal("0.001"), result.data[:amount_exec]
+  end
+
   def test_order_history
     @client.expects(:get_authenticated).with("/v5/order/history", {
       category: "spot", symbol: nil, orderId: "123", orderLinkId: nil, orderStatus: nil,

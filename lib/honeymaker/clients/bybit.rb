@@ -223,9 +223,10 @@ module Honeymaker
       def parse_order_status(status)
         case status
         when "Created", "Untriggered" then :unknown
-        when "New", "PartiallyFilled", "PartiallyFilledCanceled" then :open
+        when "New", "PartiallyFilled" then :open
         when "Filled" then :closed
-        when "Cancelled", "Expired", "Deactivated" then :cancelled
+        # PartiallyFilledCanceled is final: a spot order cancelled after a partial fill.
+        when "Cancelled", "PartiallyFilledCanceled", "Expired", "Deactivated" then :cancelled
         when "Rejected" then :failed
         else :unknown
         end
