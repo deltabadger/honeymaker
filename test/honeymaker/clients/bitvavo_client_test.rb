@@ -95,6 +95,21 @@ class Honeymaker::Clients::BitvavoTest < Minitest::Test
     assert result.success?
   end
 
+  def test_deposit_history_path
+    @client.expects(:get_signed).with("/v2/depositHistory", { symbol: "BTC", limit: 1000, start: 1, end: 2 })
+    @client.get_deposit_history(symbol: "BTC", limit: 1000, start_time: 1, end_time: 2)
+  end
+
+  def test_withdrawal_history_path
+    @client.expects(:get_signed).with("/v2/withdrawalHistory", { symbol: nil, limit: 1000, start: 1, end: 2 })
+    @client.get_withdrawal_history(limit: 1000, start_time: 1, end_time: 2)
+  end
+
+  def test_transactions_read_account_history
+    @client.expects(:get_signed).with("/v2/account/history", { fromDate: 1, toDate: 2, page: 3, maxItems: 100, type: "deposit" })
+    @client.get_transactions(limit: 100, start_time: 1, end_time: 2, page: 3, type: "deposit")
+  end
+
   def test_get_deposit_history
     stub_connection(:get, [{ "symbol" => "BTC", "amount" => "1.0" }])
     result = @client.get_deposit_history
