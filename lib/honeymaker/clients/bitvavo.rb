@@ -90,12 +90,14 @@ module Honeymaker
         })
       end
 
+      # GET /v2/deposit is the deposit ADDRESS, and GET /v2/withdrawal answers 405. The histories are
+      # /v2/depositHistory and /v2/withdrawalHistory: limit ≤ 1000 (default 500), latest first.
       def get_deposit_history(symbol: nil, limit: nil, start_time: nil, end_time: nil)
-        get_signed("/v2/deposit", { symbol: symbol, limit: limit, start: start_time, end: end_time })
+        get_signed("/v2/depositHistory", { symbol: symbol, limit: limit, start: start_time, end: end_time })
       end
 
       def get_withdrawal_history(symbol: nil, limit: nil, start_time: nil, end_time: nil)
-        get_signed("/v2/withdrawal", { symbol: symbol, limit: limit, start: start_time, end: end_time })
+        get_signed("/v2/withdrawalHistory", { symbol: symbol, limit: limit, start: start_time, end: end_time })
       end
 
       def withdraw(symbol:, amount:, address:, payment_id: nil)
@@ -106,8 +108,11 @@ module Honeymaker
 
       # --- History ---
 
-      def get_transactions(limit: nil, start_time: nil, end_time: nil)
-        get_signed("/v2/transactions", { limit: limit, start: start_time, end: end_time })
+      # /v2/transactions is a 404. The transaction history is /v2/account/history: every type (buy,
+      # sell, deposit, withdrawal, staking, ...), fromDate/toDate in ms, page from 1, maxItems ≤ 100;
+      # answers { "items" => [...], "currentPage", "totalPages", "maxItems" }.
+      def get_transactions(limit: nil, start_time: nil, end_time: nil, page: nil, type: nil)
+        get_signed("/v2/account/history", { fromDate: start_time, toDate: end_time, page: page, maxItems: limit, type: type })
       end
 
       private
