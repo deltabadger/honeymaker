@@ -69,6 +69,20 @@ class Honeymaker::Clients::CoinbaseTest < Minitest::Test
     assert result.success?
   end
 
+  def test_list_accounts_passes_cursor_and_limit
+    response = stub(body: { "accounts" => [], "has_next" => false, "cursor" => "" })
+    request = stub(url: nil)
+    request.stubs(:headers=)
+    request.stubs(:http_method).returns(:get)
+    request.stubs(:path).returns("/api/v3/brokerage/accounts")
+    request.expects(:params=).with({ limit: 250, cursor: "c2" })
+    connection = stub
+    connection.stubs(:get).yields(request).returns(response)
+    @client.instance_variable_set(:@connection, connection)
+
+    assert @client.list_accounts(limit: 250, cursor: "c2").success?
+  end
+
   def test_send_money
     stub_connection(:post, { "data" => { "id" => "tx1" } })
     result = @client.send_money(account_id: "acc1", to: "addr", amount: "0.1", currency: "BTC")

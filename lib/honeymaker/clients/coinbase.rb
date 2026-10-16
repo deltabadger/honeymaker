@@ -105,8 +105,9 @@ module Honeymaker
         get("/api/v3/brokerage/key_permissions")
       end
 
-      def list_accounts
-        get("/api/v3/brokerage/accounts")
+      # One page of accounts; pass the response's `cursor` back while `has_next` is true.
+      def list_accounts(limit: nil, cursor: nil)
+        get("/api/v3/brokerage/accounts", { limit: limit, cursor: cursor })
       end
 
       def list_portfolios
