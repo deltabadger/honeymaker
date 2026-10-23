@@ -23,7 +23,7 @@ class Honeymaker::Exchanges::BingXTest < Minitest::Test
     assert_equal "BTC-USDT", ticker[:ticker]
     assert_equal "BTC", ticker[:base]
     assert_equal "USDT", ticker[:quote]
-    assert_equal "0.00001", ticker[:minimum_base_size]
+    assert_equal "0", ticker[:minimum_base_size] # deprecated minQty (0.00001) ignored
     assert_equal "1", ticker[:minimum_quote_size]
     assert_equal "500", ticker[:maximum_base_size]
     assert_equal 5, ticker[:base_decimals]

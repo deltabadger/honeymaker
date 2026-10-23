@@ -375,8 +375,8 @@ pub struct Ticker {
     pub base: Value,
     pub quote: Value,
     pub minimum_base_size: Value,
-    /// REAL_COSTMIN[quote] || costmin || 0 as a raw value; the wrapper applies Ruby's `.to_s`
-    /// (Float#to_s gives "5.0e-05" for XBT, which is part of the contract).
+    /// max(costmin || 0, REAL_COSTMIN[quote]) as a raw value (whichever wins, as given); the
+    /// wrapper applies Ruby's `.to_s` (Float#to_s gives "5.0e-05" for XBT, part of the contract).
     pub minimum_quote_size: Value,
     pub base_decimals: Value,
     pub quote_decimals: Value,
@@ -384,6 +384,8 @@ pub struct Ticker {
     pub trading_enabled: bool,
 }
 
+/// Mirror of Honeymaker::Floors::MINIMUM_QUOTE["kraken"] (lib/honeymaker/floors.rb, where each
+/// floor's source is noted); test/parity/kraken_exchange_parity_test.rb checks every quote.
 const REAL_COSTMIN: &[(&str, &str)] = &[
     // JSON literals of the Ruby constants (Integer vs Float kept)
     ("AUD", "10"),
@@ -443,12 +445,18 @@ pub fn tickers<D: Num>(data: &Value) -> R<Vec<Ticker>, D> {
                 let parts = D::string_op(&ws, StringOp::Split("/")).map_err(NormError::Num)?;
                 let base = parts[0].clone();
                 let quote = parts[1].clone();
-                let costmin = REAL_COSTMIN
-                    .iter()
-                    .find(|(k, _)| string_eq(&quote, k))
-                    .map(|(_, lit)| serde_json::from_str::<Value>(lit).expect("literal"))
-                    .or_else(|| info.get("costmin").filter(|v| truthy(Some(v))).cloned())
+                let published = info
+                    .get("costmin")
+                    .filter(|v| truthy(Some(v)))
+                    .cloned()
                     .unwrap_or(Value::from(0));
+                let costmin = match REAL_COSTMIN.iter().find(|(k, _)| string_eq(&quote, k)) {
+                    None => published,
+                    Some((_, lit)) => at_least::<D>(
+                        published,
+                        serde_json::from_str::<Value>(lit).expect("literal"),
+                    )?,
+                };
                 let trading_enabled = if info
                     .get("aclass_base")
                     .is_some_and(|v| string_eq(v, "tokenized_asset"))
@@ -473,6 +481,20 @@ pub fn tickers<D: Num>(data: &Value) -> R<Vec<Ticker>, D> {
             })
             .collect::<Result<Vec<_>, NormError<D::Error>>>()?,
     ))
+}
+
+/// Legacy Floors.minimum_quote: `BigDecimal(published.to_s) > BigDecimal(floor.to_s) ? published :
+/// floor`, the floor when published does not parse (`rescue ArgumentError`).
+fn at_least<D: Num>(published: Value, floor: Value) -> Result<Value, NormError<D::Error>> {
+    let Ok(p) = D::parse_to_s(&published) else {
+        return Ok(floor);
+    };
+    let f = D::parse_to_s(&floor).map_err(NormError::Num)?;
+    Ok(if p.gt(&f).map_err(NormError::Num)? {
+        published
+    } else {
+        floor
+    })
 }
 
 /// Legacy: raise error.first if errors; first result entry; BigDecimal(data["b"][0]) (no to_s).

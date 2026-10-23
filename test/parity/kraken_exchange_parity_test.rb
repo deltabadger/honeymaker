@@ -43,6 +43,32 @@ class KrakenExchangeParityTest < Minitest::Test
      [500, JSON_CT, "{}"]].each { |reply| assert_parity(reply, &:get_tickers_info) }
   end
 
+  # The native REAL_COSTMIN mirrors Honeymaker::Floors: every floored quote, published below,
+  # above, equal to, missing and unreadable, plus an unfloored quote.
+  def test_cost_floors_match_the_shared_table
+    floors = Honeymaker::Floors::MINIMUM_QUOTE[["kraken", nil]]
+    pairs = {}
+    (floors.keys + ["FOO"]).each do |quote|
+      floor = floors[quote] || 1
+      [(BigDecimal(floor.to_s) / 10).to_s("F"), (BigDecimal(floor.to_s) * 10).to_s("F"), floor.to_s, nil, "abc", floor * 3].each_with_index do |costmin, i|
+        ws = "B#{i}/#{quote}"
+        pairs[ws] = { "altname" => ws, "wsname" => ws, "costmin" => costmin }
+      end
+    end
+    reply = [200, JSON_CT, { "error" => [], "result" => pairs }.to_json]
+    assert_parity(reply, &:get_tickers_info)
+
+    d = VenueDouble.new([reply])
+    e = Honeymaker::Native::KrakenExchange.new
+    e.instance_variable_set(:@connection, e.send(:build_connection, d.url))
+    got = e.get_tickers_info.data.to_h { |t| [t[:ticker], t[:minimum_quote_size]] }
+    assert_equal floors["USD"].to_s, got["B0/USD"]
+    assert_equal "50.0", got["B1/USD"]
+    assert_equal "0.1", got["B0/FOO"]
+  ensure
+    d&.close
+  end
+
   def test_one_malformed_row_fails_the_whole_catalogue_like_legacy
     replies = [false, 1, { "x" => 1 }].map do |bad|
       pairs = { "XXBTZUSD" => { "altname" => "XBTUSD", "wsname" => "XBT/USD", "status" => "online" },

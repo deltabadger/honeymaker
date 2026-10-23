@@ -18,7 +18,9 @@ module Honeymaker
               ticker: ticker,
               base: parts[0],
               quote: parts[1],
-              minimum_base_size: product["minQty"]&.to_s,
+              # minQty is deprecated and far above what BingX accepts (~15 USDT on BTC-USDT against a
+              # 0.5 minNotional); the notional is the venue's only real floor.
+              minimum_base_size: "0",
               minimum_quote_size: product["minNotional"]&.to_s,
               maximum_base_size: product["maxQty"]&.to_s,
               maximum_quote_size: product["maxNotional"]&.to_s,

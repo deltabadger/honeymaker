@@ -5,11 +5,6 @@ module Honeymaker
     class Hyperliquid < Exchange
       BASE_URL = "https://api.hyperliquid.xyz"
 
-      # Hyperliquid enforces a hard 10-USDC minimum order value on every spot pair (spotMeta exposes
-      # no per-token base floor). Surfaced as minimum_quote_size so consumers skip/reject sub-10
-      # orders up front instead of having the exchange reject them.
-      MINIMUM_QUOTE_SIZE = 10
-
       def get_tickers_info
         with_rescue do
           response = connection.post("/info") do |req|
@@ -30,7 +25,7 @@ module Honeymaker
               base: base_token["name"],
               quote: quote_token["name"],
               minimum_base_size: nil,
-              minimum_quote_size: MINIMUM_QUOTE_SIZE,
+              minimum_quote_size: Floors.minimum_quote(venue: "hyperliquid", quote: quote_token["name"]),
               maximum_base_size: nil,
               maximum_quote_size: nil,
               base_decimals: base_token["szDecimals"] || 0,
