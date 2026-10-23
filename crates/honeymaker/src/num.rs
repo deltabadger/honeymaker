@@ -23,6 +23,8 @@ pub trait Num: Sized {
     fn sub(&self, other: &Self) -> Result<Self, Self::Error>;
     fn div(&self, other: &Self) -> Result<Self, Self::Error>;
     fn is_zero(&self) -> Result<bool, Self::Error>;
+    /// Legacy `self > other`.
+    fn gt(&self, other: &Self) -> Result<bool, Self::Error>;
 }
 
 #[derive(Debug)]
@@ -111,5 +113,8 @@ impl Num for BigDecimal {
     }
     fn is_zero(&self) -> Result<bool, String> {
         Ok(self == &BigDecimal::from(0))
+    }
+    fn gt(&self, o: &Self) -> Result<bool, String> {
+        Ok(self > o)
     }
 }

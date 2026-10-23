@@ -27,25 +27,6 @@ module Honeymaker
         }
       ].freeze
 
-      REAL_COSTMIN = {
-        "AUD" => 10,
-        "CAD" => 5,
-        "CHF" => 5,
-        "DAI" => 5,
-        "ETH" => 0.002,
-        "EUR" => 0.5,
-        "GBP" => 5,
-        "JPY" => 500,
-        "PYUSD" => 5,
-        "RLUSD" => 5,
-        "USD" => 5,
-        "USDC" => 5,
-        "USDQ" => 5,
-        "USDR" => 5,
-        "USDT" => 5,
-        "XBT" => 0.00005
-      }.freeze
-
       def get_tickers_info
         with_rescue do
           # aclass_base=all, not a bare call: the default response carries only the "currency" class,
@@ -74,7 +55,7 @@ module Honeymaker
               base: base,
               quote: quote,
               minimum_base_size: info["ordermin"],
-              minimum_quote_size: (REAL_COSTMIN[quote] || info["costmin"] || 0).to_s,
+              minimum_quote_size: Floors.minimum_quote(venue: "kraken", quote: quote, published: info["costmin"] || 0).to_s,
               maximum_base_size: nil,
               maximum_quote_size: nil,
               base_decimals: info["lot_decimals"],

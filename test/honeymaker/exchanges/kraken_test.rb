@@ -123,6 +123,18 @@ class Honeymaker::Exchanges::KrakenTest < Minitest::Test
     assert_equal "5", ticker[:minimum_quote_size]
   end
 
+  def test_cost_floor_is_a_max_of_published_and_floor
+    body = load_fixture("kraken_asset_pairs.json")
+    key, info = body["result"].find { |_, i| i["wsname"]&.end_with?("/USDT") }
+    body["result"] = { key => info.merge("costmin" => "0.5") }
+    stub_request(body)
+    assert_equal "5", @exchange.get_tickers_info.data.first[:minimum_quote_size]
+
+    body["result"] = { key => info.merge("costmin" => "12.5") }
+    stub_request(body)
+    assert_equal "12.5", @exchange.get_tickers_info.data.first[:minimum_quote_size]
+  end
+
   def test_get_tickers_info_handles_api_error
     body = { "error" => ["EGeneral:Internal error"], "result" => {} }
     stub_request(body)

@@ -87,4 +87,8 @@ impl Num for RubyDecimal {
     fn is_zero(&self) -> Result<bool, magnus::Error> {
         self.value().funcall("zero?", ())
     }
+
+    fn gt(&self, o: &Self) -> Result<bool, magnus::Error> {
+        self.value().funcall(">", (o.value(),))
+    }
 }

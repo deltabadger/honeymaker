@@ -590,3 +590,30 @@ fn credentials_debug_shows_the_key_and_redacts_the_secret() {
     assert!(shown.contains("<redacted>"), "{shown}");
     assert!(!shown.contains("c2VjcmV0LXNlY3JldA=="), "{shown}");
 }
+
+#[test]
+fn the_cost_floor_is_a_max_never_an_override() {
+    let pair =
+        |ws: &str, costmin: Value| json!({ "altname": ws, "wsname": ws, "costmin": costmin });
+    let body = json!({ "error": [], "result": {
+        "A": pair("XBT/USD", json!("0.5")),  // below the 5 USD floor
+        "B": pair("ETH/USD", json!("12.5")), // above it: the venue's own figure wins
+        "C": pair("SOL/USD", json!("abc")),  // unreadable: the floor
+        "D": pair("SOL/XBT", json!(null)),   // missing: the floor
+        "E": pair("SOL/FOO", json!("0.1")),  // no floor for the quote: published as is
+    }});
+    let Finished::Ok(ts) = normalize::tickers::<BigDecimal>(&body).unwrap() else {
+        panic!("venue refusal")
+    };
+    let got: Vec<Value> = ts.into_iter().map(|t| t.minimum_quote_size).collect();
+    assert_eq!(
+        got,
+        vec![
+            json!(5),
+            json!("12.5"),
+            json!(5),
+            json!(0.00005),
+            json!("0.1")
+        ]
+    );
+}
